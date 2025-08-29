@@ -145,7 +145,7 @@ class PaymentService:
                 )
             
             # Calculate coins amount
-            coins_amount = BalanceService.usd_to_coins(amount_usd)
+            coins_amount = BalanceService.usd_to_coins_static(amount_usd)
             
             # Create pending transaction
             transaction = await BalanceService.create_pending_transaction(

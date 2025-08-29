@@ -30,19 +30,19 @@ def get_main_menu_keyboard(language: Language, is_admin: bool = False) -> Inline
     
     # Social media platform buttons - clean professional icons
     builder.button(
-        text="📱 Telegram Services",
+        text=f"📱 {get_text('telegram_services', language)}",
         callback_data="platform_telegram"
     )
     builder.button(
-        text="📸 Instagram Services",
+        text=f"📸 {get_text('instagram_services', language)}",
         callback_data="platform_instagram"
     )
     builder.button(
-        text="🎵 TikTok Services",
+        text=f"🎵 {get_text('tiktok_services', language)}",
         callback_data="platform_tiktok"
     )
     builder.button(
-        text="▶️ YouTube Services",
+        text=f"▶️ {get_text('youtube_services', language)}",
         callback_data="platform_youtube"
     )
     
@@ -202,50 +202,50 @@ def get_platform_services_keyboard(platform: str, language: Language) -> InlineK
     # Professional service buttons for each platform
     if platform.lower() == "telegram":
         builder.button(
-            text=f"{icon} Members",
+            text=f"{icon} {get_text('members', language)}",
             callback_data=f"platform_service_telegram_members"
         )
         builder.button(
-            text=f"{icon} Views",
+            text=f"{icon} {get_text('views', language)}",
             callback_data=f"platform_service_telegram_views"
         )
     elif platform.lower() == "instagram":
         builder.button(
-            text=f"{icon} Followers",
+            text=f"{icon} {get_text('followers', language)}",
             callback_data=f"platform_service_instagram_followers"
         )
         builder.button(
-            text=f"{icon} Likes",
+            text=f"{icon} {get_text('likes', language)}",
             callback_data=f"platform_service_instagram_likes"
         )
         builder.button(
-            text=f"{icon} Comments",
+            text=f"{icon} {get_text('comments', language)}",
             callback_data=f"platform_service_instagram_comments"
         )
     elif platform.lower() == "tiktok":
         builder.button(
-            text=f"{icon} Followers",
+            text=f"{icon} {get_text('followers', language)}",
             callback_data=f"platform_service_tiktok_followers"
         )
         builder.button(
-            text=f"{icon} Likes",
+            text=f"{icon} {get_text('likes', language)}",
             callback_data=f"platform_service_tiktok_likes"
         )
         builder.button(
-            text=f"{icon} Views",
+            text=f"{icon} {get_text('views', language)}",
             callback_data=f"platform_service_tiktok_views"
         )
     elif platform.lower() == "youtube":
         builder.button(
-            text=f"{icon} Subscribers",
+            text=f"{icon} {get_text('subscribers', language)}",
             callback_data=f"platform_service_youtube_subscribers"
         )
         builder.button(
-            text=f"{icon} Views",
+            text=f"{icon} {get_text('views', language)}",
             callback_data=f"platform_service_youtube_views"
         )
         builder.button(
-            text=f"{icon} Likes",
+            text=f"{icon} {get_text('likes', language)}",
             callback_data=f"platform_service_youtube_likes"
         )
     
@@ -331,19 +331,19 @@ def get_popular_services_keyboard(language: Language) -> InlineKeyboardMarkup:
     
     # Popular services with professional styling
     builder.button(
-        text="📱 Telegram Members",
+        text=f"📱 Telegram {get_text('members', language)}",
         callback_data="popular_telegram_members"
     )
     builder.button(
-        text="▶️ YouTube Views",
+        text=f"▶️ YouTube {get_text('views', language)}",
         callback_data="popular_youtube_views"
     )
     builder.button(
-        text="🎵 TikTok Views",
+        text=f"🎵 TikTok {get_text('views', language)}",
         callback_data="popular_tiktok_views"
     )
     builder.button(
-        text="📸 Instagram Likes",
+        text=f"📸 Instagram {get_text('likes', language)}",
         callback_data="popular_instagram_likes"
     )
     

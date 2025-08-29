@@ -336,6 +336,150 @@ async def handle_payment_amount(message: Message, state: FSMContext):
         await state.clear()
 
 
+# Platform handlers
+@router.callback_query(F.data.startswith("platform_"))
+async def handle_platform_selection(callback: CallbackQuery):
+    """Handle platform selection"""
+    try:
+        platform = callback.data.split("_")[1]
+        
+        async for db in get_db():
+            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+            if user:
+                language = Language(user.language.value)
+                
+                # Get platform-specific text
+                platform_names = {
+                    "telegram": get_text("telegram_services", language),
+                    "instagram": get_text("instagram_services", language), 
+                    "tiktok": get_text("tiktok_services", language),
+                    "youtube": get_text("youtube_services", language)
+                }
+                
+                platform_name = platform_names.get(platform, f"{platform.title()} Services")
+                
+                await callback.message.edit_text(
+                    f"📊 {platform_name}\n\n{get_text('choose_service_type', language)}",
+                    reply_markup=get_platform_services_keyboard(platform, language)
+                )
+            break
+    except Exception as e:
+        logger.error(f"Error in platform selection: {e}")
+        await callback.answer("❌ Error")
+
+
+@router.callback_query(F.data.startswith("platform_service_"))
+async def handle_platform_service_selection(callback: CallbackQuery, state: FSMContext):
+    """Handle platform service selection"""
+    try:
+        # Parse callback data: platform_service_platform_servicetype
+        parts = callback.data.split("_")
+        if len(parts) >= 4:
+            platform = parts[2]
+            service_type = "_".join(parts[3:])
+            
+            async for db in get_db():
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    # Find matching services from database
+                    services = await ServiceService.get_services_by_platform_and_type(db, platform, service_type)
+                    
+                    if services:
+                        # Show available services for this platform/type
+                        await callback.message.edit_text(
+                            f"🛍️ {platform.title()} {service_type.title().replace('_', ' ')}\n\n{get_text('choose_service', language)}",
+                            reply_markup=get_services_keyboard(services, 0, language)
+                        )
+                    else:
+                        # No specific services found, show general service categories
+                        categories = await ServiceService.get_active_categories(db)
+                        if categories:
+                            await callback.message.edit_text(
+                                get_text("choose_category", language),
+                                reply_markup=get_service_categories_keyboard(categories, language)
+                            )
+                        else:
+                            await callback.message.edit_text(
+                                get_text("no_services", language),
+                                reply_markup=get_back_keyboard(language, "menu_main")
+                            )
+                break
+    except Exception as e:
+        logger.error(f"Error in platform service selection: {e}")
+        await callback.answer("❌ Error")
+
+
+@router.callback_query(F.data == "menu_popular")
+async def handle_popular_services(callback: CallbackQuery):
+    """Handle popular services menu"""
+    try:
+        async for db in get_db():
+            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+            if user:
+                language = Language(user.language.value)
+                
+                # Get popular services
+                popular_services = await ServiceService.get_popular_services(db, limit=10)
+                
+                if popular_services:
+                    text = f"⭐ {get_text('popular_services', language)}\n\n"
+                    text += get_text('popular_services_desc', language)
+                    
+                    await callback.message.edit_text(
+                        text,
+                        reply_markup=get_popular_services_keyboard(language)
+                    )
+                else:
+                    # Fallback to categories if no popular services
+                    categories = await ServiceService.get_active_categories(db)
+                    if categories:
+                        await callback.message.edit_text(
+                            get_text("choose_category", language),
+                            reply_markup=get_service_categories_keyboard(categories, language)
+                        )
+                    else:
+                        await callback.message.edit_text(
+                            get_text("no_services", language),
+                            reply_markup=get_back_keyboard(language)
+                        )
+            break
+    except Exception as e:
+        logger.error(f"Error in popular services: {e}")
+        await callback.answer("❌ Error")
+
+
+@router.callback_query(F.data.startswith("popular_"))
+async def handle_popular_service_selection(callback: CallbackQuery, state: FSMContext):
+    """Handle popular service selection"""
+    try:
+        service_type = callback.data.replace("popular_", "")
+        
+        async for db in get_db():
+            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+            if user:
+                language = Language(user.language.value)
+                
+                # Find services matching the popular type
+                services = await ServiceService.get_services_by_type(db, service_type)
+                
+                if services:
+                    await callback.message.edit_text(
+                        f"⭐ {service_type.replace('_', ' ').title()}\n\n{get_text('choose_service', language)}",
+                        reply_markup=get_services_keyboard(services, 0, language)
+                    )
+                else:
+                    await callback.message.edit_text(
+                        get_text("no_services", language),
+                        reply_markup=get_back_keyboard(language, "menu_popular")
+                    )
+            break
+    except Exception as e:
+        logger.error(f"Error in popular service selection: {e}")
+        await callback.answer("❌ Error")
+
+
 @router.callback_query(F.data == "menu_services")
 async def handle_services_menu(callback: CallbackQuery):
     """Handle services menu"""
@@ -784,6 +928,35 @@ async def handle_support_menu(callback: CallbackQuery, user_language: Language =
     except Exception as e:
         logger.error(f"Error in support menu: {e}")
         await callback.answer("❌ Error loading support")
+
+
+# Sticker handlers
+@router.message(F.sticker)
+async def handle_sticker(message: Message):
+    """Handle sticker messages with appropriate responses"""
+    try:
+        async for db in get_db():
+            user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
+            if user:
+                language = Language(user.language.value)
+                
+                # Respond with a fun message and show main menu
+                sticker_responses = [
+                    get_text("sticker_response_1", language),
+                    get_text("sticker_response_2", language),
+                    get_text("sticker_response_3", language)
+                ]
+                
+                import random
+                response = random.choice(sticker_responses)
+                
+                await message.answer(
+                    response,
+                    reply_markup=get_main_menu_keyboard(language, user.is_admin)
+                )
+            break
+    except Exception as e:
+        logger.error(f"Error handling sticker: {e}")
 
 
 @router.callback_query(F.data == "balance_history")

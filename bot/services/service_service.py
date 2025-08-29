@@ -367,6 +367,78 @@ class ServiceService:
             return False
     
     @staticmethod
+    async def get_services_by_platform_and_type(db: AsyncSession, platform: str, service_type: str) -> List[Service]:
+        """Get services by platform and service type"""
+        try:
+            # Create search terms based on platform and service type
+            search_terms = f"{platform} {service_type}".replace("_", " ")
+            
+            result = await db.execute(
+                select(Service)
+                .where(
+                    and_(
+                        Service.is_active == True,
+                        Service.name.ilike(f"%{search_terms}%")
+                    )
+                )
+                .options(selectinload(Service.category))
+                .order_by(Service.sort_order, Service.name)
+                .limit(20)
+            )
+            
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting services by platform and type: {e}")
+            return []
+    
+    @staticmethod
+    async def get_services_by_type(db: AsyncSession, service_type: str) -> List[Service]:
+        """Get services by service type"""
+        try:
+            # Clean up service type for search
+            search_term = service_type.replace("_", " ")
+            
+            result = await db.execute(
+                select(Service)
+                .where(
+                    and_(
+                        Service.is_active == True,
+                        Service.name.ilike(f"%{search_term}%")
+                    )
+                )
+                .options(selectinload(Service.category))
+                .order_by(Service.sort_order, Service.name)
+                .limit(20)
+            )
+            
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting services by type: {e}")
+            return []
+    
+    @staticmethod
+    async def get_popular_services(db: AsyncSession, limit: int = 10) -> List[Service]:
+        """Get popular services (by order count or predefined popularity)"""
+        try:
+            # For now, return services with lowest sort_order as "popular"
+            # In future, this could be based on actual order statistics
+            result = await db.execute(
+                select(Service)
+                .where(Service.is_active == True)
+                .options(selectinload(Service.category))
+                .order_by(Service.sort_order, Service.price_per_1000)
+                .limit(limit)
+            )
+            
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting popular services: {e}")
+            return []
+    
+    @staticmethod
     async def get_services_stats(db: AsyncSession) -> Dict[str, Any]:
         """Get services statistics"""
         try:

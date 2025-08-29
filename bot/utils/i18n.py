@@ -38,6 +38,7 @@ TRANSLATIONS = {
         "choose_payment_method": "💳 Choose payment method:",
         "payment_cards": "💳 Cards (Visa/Mastercard)",
         "payment_crypto": "₿ Cryptocurrency",
+        "payment_paypal": "💳 PayPal",
         "payment_payme": "💙 Payme",
         "payment_click": "🟡 Click",
         "payment_uzcard": "💚 Uzcard",
@@ -51,7 +52,20 @@ TRANSLATIONS = {
         # Services
         "choose_category": "📊 Choose service category:",
         "choose_service": "Select a service:",
+        "choose_service_type": "Choose service type:",
         "no_services": "No services available at the moment. Please try again later.",
+        "popular_services": "Popular Services",
+        "popular_services_desc": "Most popular services chosen by our customers:",
+        "telegram_services": "Telegram Services",
+        "instagram_services": "Instagram Services",
+        "tiktok_services": "TikTok Services",
+        "youtube_services": "YouTube Services",
+        "members": "Members",
+        "followers": "Followers",
+        "subscribers": "Subscribers",
+        "views": "Views",
+        "likes": "Likes",
+        "comments": "Comments",
         "service_details": "📊 {name}\n💰 Price: {price} coins per 1000\n📊 Min: {min_qty} | Max: {max_qty}",
         "enter_link": "🔗 Enter your social media link:",
         "enter_quantity": "🔢 Enter quantity ({min_qty} - {max_qty}):",
@@ -89,6 +103,11 @@ TRANSLATIONS = {
         "payment_management": "💳 Payment Management",
         "analytics": "📈 Analytics",
         "settings_admin": "⚙️ Settings",
+        
+        # Stickers
+        "sticker_response_1": "😄 Nice sticker! Let me show you our services:",
+        "sticker_response_2": "🎉 I love stickers too! Check out what we offer:",
+        "sticker_response_3": "😊 Thanks for the sticker! Here's your menu:",
         
         # Common
         "back": "⬅️ Back",
@@ -128,6 +147,7 @@ TRANSLATIONS = {
         "choose_payment_method": "💳 Выберите способ оплаты:",
         "payment_cards": "💳 Карты (Visa/Mastercard)",
         "payment_crypto": "₿ Криптовалюта",
+        "payment_paypal": "💳 PayPal",
         "payment_payme": "💙 Payme",
         "payment_click": "🟡 Click",
         "payment_uzcard": "💚 Uzcard",
@@ -141,7 +161,20 @@ TRANSLATIONS = {
         # Services
         "choose_category": "📊 Выберите категорию услуг:",
         "choose_service": "Выберите услугу:",
+        "choose_service_type": "Выберите тип услуги:",
         "no_services": "В данный момент нет доступных услуг. Пожалуйста, попробуйте позже.",
+        "popular_services": "Популярные услуги",
+        "popular_services_desc": "Самые популярные услуги, выбранные нашими клиентами:",
+        "telegram_services": "Услуги Telegram",
+        "instagram_services": "Услуги Instagram",
+        "tiktok_services": "Услуги TikTok",
+        "youtube_services": "Услуги YouTube",
+        "members": "Участники",
+        "followers": "Подписчики",
+        "subscribers": "Подписчики",
+        "views": "Просмотры",
+        "likes": "Лайки",
+        "comments": "Комментарии",
         "service_details": "📊 {name}\n💰 Цена: {price} монет за 1000\n📊 Мин: {min_qty} | Макс: {max_qty}",
         "enter_link": "🔗 Введите ссылку на социальную сеть:",
         "enter_quantity": "🔢 Введите количество ({min_qty} - {max_qty}):",
@@ -179,6 +212,11 @@ TRANSLATIONS = {
         "payment_management": "💳 Управление платежами",
         "analytics": "📈 Аналитика",
         "settings_admin": "⚙️ Настройки",
+        
+        # Stickers
+        "sticker_response_1": "😄 Отличный стикер! Позвольте показать вам наши услуги:",
+        "sticker_response_2": "🎉 Я тоже люблю стикеры! Посмотрите, что мы предлагаем:",
+        "sticker_response_3": "😊 Спасибо за стикер! Вот ваше меню:",
         
         # Common
         "back": "⬅️ Назад",
@@ -218,6 +256,7 @@ TRANSLATIONS = {
         "choose_payment_method": "💳 To'lov usulini tanlang:",
         "payment_cards": "💳 Kartalar (Visa/Mastercard)",
         "payment_crypto": "₿ Kriptovalyuta",
+        "payment_paypal": "💳 PayPal",
         "payment_payme": "💙 Payme",
         "payment_click": "🟡 Click",
         "payment_uzcard": "💚 Uzcard",
@@ -231,7 +270,20 @@ TRANSLATIONS = {
         # Services
         "choose_category": "📊 Xizmat kategoriyasini tanlang:",
         "choose_service": "Xizmatni tanlang:",
+        "choose_service_type": "Xizmat turini tanlang:",
         "no_services": "Hozircha xizmatlar mavjud emas. Iltimos keyinroq urinib ko'ring.",
+        "popular_services": "Mashhur xizmatlar",
+        "popular_services_desc": "Mijozlarimiz tomonidan eng ko'p tanlanadigan xizmatlar:",
+        "telegram_services": "Telegram xizmatlari",
+        "instagram_services": "Instagram xizmatlari",
+        "tiktok_services": "TikTok xizmatlari",
+        "youtube_services": "YouTube xizmatlari",
+        "members": "A'zolar",
+        "followers": "Obunachilar",
+        "subscribers": "Obunachilar",
+        "views": "Ko'rishlar",
+        "likes": "Yoqtirishlar",
+        "comments": "Izohlar",
         "service_details": "📊 {name}\n💰 Narx: {price} tanga 1000 ta uchun\n📊 Min: {min_qty} | Maks: {max_qty}",
         "enter_link": "🔗 Ijtimoiy tarmoq havolasini kiriting:",
         "enter_quantity": "🔢 Miqdorni kiriting ({min_qty} - {max_qty}):",
@@ -269,6 +321,11 @@ TRANSLATIONS = {
         "payment_management": "💳 To'lovlarni boshqarish",
         "analytics": "📈 Analitika",
         "settings_admin": "⚙️ Sozlamalar",
+        
+        # Stickers
+        "sticker_response_1": "😄 Ajoyib stiker! Xizmatlarimizni ko'rsataman:",
+        "sticker_response_2": "🎉 Men ham stikerlarni yaxshi ko'raman! Takliflarimizni ko'ring:",
+        "sticker_response_3": "😊 Stiker uchun rahmat! Menyuingiz:",
         
         # Common
         "back": "⬅️ Orqaga",
