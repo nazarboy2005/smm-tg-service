@@ -6,7 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 from loguru import logger
 
-from bot.database.db import get_db
+from bot.database.db import get_db_session
 from bot.services.user_service import UserService
 from bot.utils.i18n import Language
 
@@ -37,11 +37,13 @@ class LanguageMiddleware(BaseMiddleware):
         language = Language.ENGLISH  # Default language
         
         try:
-            async for db in get_db():
+            db = await get_db_session()
+            try:
                 user = await UserService.get_user_by_telegram_id(db, user_id)
                 if user and user.language:
                     language = Language(user.language.value)
-                break
+            finally:
+                await db.close()
             
             # Add language to data context for handlers
             data["user_language"] = language

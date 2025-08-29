@@ -6,6 +6,7 @@ import json
 import hmac
 import hashlib
 import time
+import asyncio
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Request, Response, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -83,8 +84,19 @@ async def webhook(request: Request):
         if bot and dp:
             from aiogram.types import Update
             update = Update(**update_data)
-            await dp.feed_update(bot, update)
-            logger.debug("Update processed successfully")
+            
+            # Use asyncio.create_task to properly handle the async operation
+            # This prevents the "Timeout context manager should be used inside a task" error
+            task = asyncio.create_task(dp.feed_update(bot, update))
+            
+            # Wait for the task to complete with a reasonable timeout
+            try:
+                await asyncio.wait_for(task, timeout=30.0)  # 30 second timeout
+                logger.debug("Update processed successfully")
+            except asyncio.TimeoutError:
+                logger.warning("Update processing timed out after 30 seconds")
+                # Don't raise an exception, just log the timeout
+                # Telegram will retry if needed
         else:
             logger.error("Bot or dispatcher not initialized for webhook")
             raise HTTPException(status_code=500, detail="Bot not ready")

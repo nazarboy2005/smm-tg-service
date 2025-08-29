@@ -91,23 +91,25 @@ async def main():
         
         # Initialize default settings
         try:
-            from bot.database.db import get_db
+            from bot.database.db import get_db_session
             from bot.services.settings_service import SettingsService
             
-            async for db in get_db():
+            db = await get_db_session()
+            try:
                 await SettingsService.initialize_default_settings(db)
-                break
-            
-            logger.info("Default settings initialized")
+                logger.info("Default settings initialized")
+            finally:
+                await db.close()
         except Exception as e:
             logger.warning(f"Failed to initialize default settings: {e}")
         
         # Sync services from JAP API on startup (non-critical)
         try:
-            from bot.database.db import get_db
+            from bot.database.db import get_db_session
             from bot.services.service_service import ServiceService
             
-            async for db in get_db():
+            db = await get_db_session()
+            try:
                 success = await ServiceService.sync_services_from_jap(db)
                 if success:
                     logger.info("Services synced from JAP API successfully")
@@ -116,15 +118,18 @@ async def main():
                     # Create demo services if JAP API fails
                     await ServiceService.create_demo_categories_and_services(db)
                     logger.info("Demo services created as fallback")
-                break
+            finally:
+                await db.close()
             
         except Exception as e:
             logger.warning(f"Failed to sync services from JAP API, creating demo services: {e}")
             try:
-                async for db in get_db():
+                db = await get_db_session()
+                try:
                     await ServiceService.create_demo_categories_and_services(db)
                     logger.info("Demo services created as fallback")
-                    break
+                finally:
+                    await db.close()
             except Exception as demo_error:
                 logger.error(f"Failed to create demo services: {demo_error}")
         
