@@ -9,7 +9,7 @@ from loguru import logger
 
 from bot.config import settings
 from bot.database.models import Base
-from bot.database.pgbouncer_fix import apply_pgbouncer_compatibility
+# Removed problematic pgbouncer_fix import that was causing AsyncEngine issues
 
 
 class DatabaseManager:
@@ -51,8 +51,7 @@ class DatabaseManager:
                 expire_on_commit=False
             )
             
-            # Apply pgbouncer compatibility fixes
-            apply_pgbouncer_compatibility(self.engine)
+            # Pgbouncer compatibility is handled through URL parameters and connect_args
             
             self._initialized = True
             logger.info("Database connection initialized successfully with pgbouncer compatibility")

@@ -53,9 +53,12 @@ class JAPService:
                     logger.error(f"JAP API request failed: {response.status} - {await response.text()}")
                     return None
                     
-        except asyncio.TimeoutError:
-            logger.error(f"JAP API request timeout for endpoint: {endpoint}")
-            return None
+        except Exception as timeout_error:
+            if "timeout" in str(timeout_error).lower():
+                logger.error(f"JAP API request timeout for endpoint: {endpoint}")
+                return None
+            else:
+                raise timeout_error
         except Exception as e:
             logger.error(f"JAP API request error for endpoint {endpoint}: {e}")
             return None
