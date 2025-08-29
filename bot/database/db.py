@@ -25,25 +25,29 @@ class DatabaseManager:
             return
         
         try:
-            # Create async engine with proper connection args for pgbouncer compatibility
+            # Create async engine with Railway/pgbouncer compatible settings
+            connect_args = {
+                "server_settings": {
+                    "application_name": "follower-tg-service",
+                },
+                "command_timeout": 60,
+            }
+            
+            # Only add statement cache settings if not using pgbouncer
+            if "pgbouncer" not in settings.database_url.lower():
+                connect_args.update({
+                    "statement_cache_size": 0,
+                    "prepared_statement_cache_size": 0,
+                })
+            
             self.engine = create_async_engine(
                 settings.database_url,
                 echo=settings.environment == "development",
                 pool_pre_ping=True,
                 pool_recycle=3600,
-                pool_size=10,
-                max_overflow=20,
-                # Disable all statement caching for pgbouncer compatibility
-                connect_args={
-                    "server_settings": {
-                        "application_name": "follower-tg-service",
-                        "statement_timeout": "60000",  # 60 seconds
-                        "lock_timeout": "30000",  # 30 seconds
-                    },
-                    "statement_cache_size": 0,  # Disable statement cache for pgbouncer
-                    "prepared_statement_cache_size": 0,  # Disable prepared statement cache
-                    "command_timeout": 60,
-                }
+                pool_size=5,  # Reduced for Railway
+                max_overflow=10,  # Reduced for Railway
+                connect_args=connect_args
             )
             
             # Create session maker

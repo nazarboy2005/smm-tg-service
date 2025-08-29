@@ -87,18 +87,31 @@ async def main():
         except Exception as e:
             logger.warning(f"Failed to initialize default settings: {e}")
         
-        # Sync services from JAP API on startup
+        # Sync services from JAP API on startup (non-critical)
         try:
             from bot.database.db import get_db
             from bot.services.service_service import ServiceService
             
             async for db in get_db():
-                await ServiceService.sync_services_from_jap(db)
+                success = await ServiceService.sync_services_from_jap(db)
+                if success:
+                    logger.info("Services synced from JAP API successfully")
+                else:
+                    logger.warning("JAP API sync failed, using demo services instead")
+                    # Create demo services if JAP API fails
+                    await ServiceService.create_demo_categories_and_services(db)
+                    logger.info("Demo services created as fallback")
                 break
             
-            logger.info("Services synced from JAP API")
         except Exception as e:
-            logger.warning(f"Failed to sync services from JAP API: {e}")
+            logger.warning(f"Failed to sync services from JAP API, creating demo services: {e}")
+            try:
+                async for db in get_db():
+                    await ServiceService.create_demo_categories_and_services(db)
+                    logger.info("Demo services created as fallback")
+                    break
+            except Exception as demo_error:
+                logger.error(f"Failed to create demo services: {demo_error}")
         
         # Start web server in a separate thread - always enabled for better UX
         logger.info("Starting web server...")
@@ -112,19 +125,33 @@ async def main():
         web_thread.start()
         logger.info("Web server started on port 8000")
         
-        # Check if we should use webhook or polling
-        webhook_url = getattr(settings, 'webhook_url', None)
-        use_webhook = getattr(settings, 'use_webhook', False)
+        # Force webhook mode for production deployment
+        webhook_url = settings.webhook_url
+        use_webhook = settings.use_webhook
         
         if use_webhook and webhook_url:
-            # Set up webhook
-            logger.info(f"Setting up webhook at: {webhook_url}")
+            # First, clear any existing webhook to avoid conflicts
+            logger.info("Clearing any existing webhook...")
+            try:
+                await bot.delete_webhook(drop_pending_updates=True)
+                await asyncio.sleep(2)  # Wait a bit for cleanup
+            except Exception as e:
+                logger.warning(f"Error clearing webhook (this is normal): {e}")
+            
+            # Set up new webhook
+            webhook_secret = settings.webhook_secret if settings.webhook_secret else None
+            logger.info(f"Setting up webhook at: {webhook_url}/webhook")
+            
             await bot.set_webhook(
                 url=f"{webhook_url}/webhook",
                 drop_pending_updates=True,
-                secret_token=settings.webhook_secret if hasattr(settings, 'webhook_secret') else None
+                secret_token=webhook_secret
             )
-            logger.info("Webhook set successfully. Bot is now running in webhook mode.")
+            
+            # Verify webhook was set
+            webhook_info = await bot.get_webhook_info()
+            logger.info(f"Webhook set successfully: {webhook_info.url}")
+            logger.info("Bot is now running in webhook mode.")
             
             # Keep the main thread alive
             import signal
@@ -138,14 +165,14 @@ async def main():
             # Wait indefinitely
             try:
                 while True:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(10)  # Check every 10 seconds
             except KeyboardInterrupt:
                 logger.info("Shutting down webhook bot...")
-                await bot.delete_webhook()
+                await bot.delete_webhook(drop_pending_updates=True)
         else:
-            # Use polling mode with drop_pending_updates to avoid conflicts
-            logger.info("Starting bot in polling mode...")
-            await dp.start_polling(bot, drop_pending_updates=True)
+            logger.error("Webhook mode is required but not properly configured!")
+            logger.error(f"use_webhook: {use_webhook}, webhook_url: {webhook_url}")
+            raise ValueError("Webhook configuration is required for production deployment")
         
     except Exception as e:
         logger.error(f"Error starting bot: {e}")

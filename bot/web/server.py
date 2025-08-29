@@ -57,30 +57,48 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 async def webhook(request: Request):
     """Handle Telegram webhook updates"""
     try:
+        # Log incoming webhook for debugging
+        logger.debug("Received webhook request")
+        
         # Verify webhook secret if configured
         if hasattr(settings, 'webhook_secret') and settings.webhook_secret:
             secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
             if secret_header != settings.webhook_secret:
-                logger.warning("Invalid webhook secret token")
+                logger.warning(f"Invalid webhook secret token. Expected: {settings.webhook_secret}, Got: {secret_header}")
                 raise HTTPException(status_code=403, detail="Invalid secret token")
         
         # Get update data
         update_data = await request.json()
+        logger.debug(f"Webhook update received: {update_data.get('update_id', 'unknown')}")
         
         # Process update if bot and dispatcher are available
         if bot and dp:
             from aiogram.types import Update
             update = Update(**update_data)
             await dp.feed_update(bot, update)
+            logger.debug("Update processed successfully")
         else:
             logger.error("Bot or dispatcher not initialized for webhook")
             raise HTTPException(status_code=500, detail="Bot not ready")
         
         return {"status": "ok"}
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error processing webhook: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error processing webhook: {e}", exc_info=True)
+        # Return 200 to prevent Telegram from retrying
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Railway"""
+    return {
+        "status": "healthy",
+        "webhook_configured": bot is not None and dp is not None,
+        "timestamp": time.time()
+    }
 
 
 def validate_telegram_data(data: Dict[str, Any]) -> bool:
