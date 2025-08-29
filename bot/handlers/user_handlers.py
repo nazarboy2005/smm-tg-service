@@ -26,6 +26,36 @@ from bot.config import settings
 router = Router()
 
 
+# Add a simple test handler at the top to ensure basic functionality
+@router.message(Command("ping"))
+async def ping_command(message: Message):
+    """Simple ping command to test bot responsiveness"""
+    try:
+        logger.info(f"Ping from user {message.from_user.id}: @{message.from_user.username}")
+        await message.answer("🏓 Pong! Bot is online and responding.")
+    except Exception as e:
+        logger.error(f"Error in ping command: {e}")
+
+
+@router.message(Command("test"))
+async def test_command(message: Message):
+    """Test command to verify bot functionality"""
+    try:
+        user_info = f"👤 User: {message.from_user.first_name} {message.from_user.last_name or ''}\n"
+        user_info += f"🆔 ID: {message.from_user.id}\n" 
+        user_info += f"📱 Username: @{message.from_user.username}\n"
+        user_info += f"🕐 Message ID: {message.message_id}"
+        
+        await message.answer(
+            f"🧪 <b>Bot Test Results</b>\n\n"
+            f"{user_info}\n\n"
+            f"✅ Bot is working correctly!",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Error handling /test command: {e}")
+
+
 class OrderStates(StatesGroup):
     waiting_for_link = State()
     waiting_for_quantity = State()

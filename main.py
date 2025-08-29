@@ -47,13 +47,28 @@ async def main():
             logger.error("Please check your database configuration and connection")
             raise
         
-        # Initialize bot
-        bot = Bot(
-            token=settings.bot_token,
-            default=DefaultBotProperties(
-                parse_mode=ParseMode.HTML
+        # Initialize bot with proper error handling
+        try:
+            bot = Bot(
+                token=settings.bot_token,
+                default=DefaultBotProperties(
+                    parse_mode=ParseMode.HTML
+                )
             )
-        )
+            
+            # Test bot token validity
+            me = await bot.get_me()
+            logger.info(f"Bot initialized successfully: @{me.username} (ID: {me.id})")
+            logger.info(f"Bot username from settings: @{settings.bot_username}")
+            
+            # Update bot username in settings if different
+            if hasattr(settings, 'bot_username') and settings.bot_username != me.username:
+                logger.warning(f"Bot username mismatch! Settings: @{settings.bot_username}, Actual: @{me.username}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize bot: {e}")
+            logger.error("Please check your bot token and network connection")
+            raise
         
         # Initialize dispatcher
         dp = Dispatcher()
