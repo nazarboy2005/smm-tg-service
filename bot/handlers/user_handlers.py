@@ -73,7 +73,8 @@ async def cmd_start(message: Message, state: FSMContext, user_language: Language
     try:
         # Get database session using proper async context manager
         from bot.database.db import get_db_session
-        async with get_db_session() as db:
+        db = await get_db_session()
+        async with db:
             # Parse referral code from start parameter
             referral_code = None
             if message.text and len(message.text.split()) > 1:
@@ -155,7 +156,8 @@ async def handle_language_selection(callback: CallbackQuery):
         
         # Get database session using proper async context manager
         from bot.database.db import get_db_session
-        async with get_db_session() as db:
+        db = await get_db_session()
+        async with db:
             user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
             if user:
                 await UserService.update_user_language(db, user.id, user_language)
@@ -176,7 +178,8 @@ async def handle_main_menu(callback: CallbackQuery, user_language: Language = No
     try:
         # Get database session using proper async context manager
         from bot.database.db import get_db_session
-        async with get_db_session() as db:
+        db = await get_db_session()
+        async with db:
             user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
             if user:
                 # Use middleware language or user language from DB

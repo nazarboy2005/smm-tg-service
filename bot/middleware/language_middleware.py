@@ -37,7 +37,8 @@ class LanguageMiddleware(BaseMiddleware):
         language = Language.ENGLISH  # Default language
         
         try:
-            async with get_db_session() as db:
+            db = await get_db_session()
+            async with db:
                 user = await UserService.get_user_by_telegram_id(db, user_id)
                 if user and user.language:
                     language = Language(user.language.value)

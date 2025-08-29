@@ -33,10 +33,13 @@ class DatabaseManager:
                 echo=settings.environment == "development",
                 pool_pre_ping=True,
                 pool_recycle=300,  # Shorter for pgbouncer compatibility
-                pool_size=3,  # Small pool for pgbouncer
-                max_overflow=5,  # Limited overflow for pgbouncer
+                pool_size=5,  # Increase pool size for better concurrency
+                max_overflow=10,  # Increase overflow for high load
                 connect_args={
                     "command_timeout": 30,  # Reasonable timeout
+                    "server_settings": {
+                        "jit": "off",  # Disable JIT for pgbouncer compatibility
+                    }
                 },
                 # Disable query compilation caching for pgbouncer
                 execution_options={
@@ -48,7 +51,9 @@ class DatabaseManager:
             self.async_session_maker = async_sessionmaker(
                 bind=self.engine,
                 class_=AsyncSession,
-                expire_on_commit=False
+                expire_on_commit=False,
+                autoflush=True,
+                autocommit=False
             )
             
             # Pgbouncer compatibility is handled through URL parameters and connect_args
@@ -101,8 +106,7 @@ class DatabaseManager:
                 await session.rollback()
                 logger.error(f"Database session error: {e}")
                 raise
-            finally:
-                await session.close()
+            # Note: session.close() is automatically called by the context manager
     
     async def close(self):
         """Close database connection"""
@@ -121,13 +125,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def get_db_session():
-    """Get a single database session for handlers"""
+async def get_db_session():
+    """Get a single database session for handlers - returns context manager"""
     if not db_manager._initialized:
-        # This should be called before using this function
-        raise RuntimeError("Database not initialized. Call init_db() first.")
+        await db_manager.initialize()
     
-    return db_manager.async_session_maker()
+    # Return a proper async context manager
+    session = db_manager.async_session_maker()
+    return session
 
 
 async def init_db():
