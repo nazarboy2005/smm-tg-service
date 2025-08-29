@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite SMM Services - Secure Payment</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #8b5cf6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-color: #1f2937;
+            --light-color: #f8fafc;
+            --gradient: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        }
+
+        body {
+            background: var(--light-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background: rgba(31, 41, 55, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .payment-container {
+            max-width: 700px;
+            margin: 2rem auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .payment-header {
+            background: var(--gradient);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .payment-header h2 {
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .payment-body {
+            padding: 2rem;
+        }
+
+        .payment-info {
+            background: linear-gradient(135deg, #f0f7ff, #e6f3ff);
+            border: 2px solid #e3f2fd;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .payment-info h5 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-weight: 700;
+            color: var(--dark-color);
+        }
+
+        .payment-method {
+            border: 2px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .payment-method:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.15);
+        }
+
+        .payment-method.selected {
+            border-color: var(--primary-color);
+            background: linear-gradient(135deg, #f0f7ff, #ffffff);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.2);
+        }
+
+        .method-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .method-info h5 {
+            font-weight: 700;
+            color: var(--dark-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .method-info small {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .method-icon {
+            font-size: 2.5rem;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .payment-method:hover .method-icon,
+        .payment-method.selected .method-icon {
+            opacity: 1;
+        }
+
+        .btn-primary {
+            background: var(--gradient);
+            border: none;
+            padding: 15px 30px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+        }
+
+        .btn-primary:disabled {
+            background: #d1d5db;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .btn-outline-secondary {
+            border: 2px solid #e5e7eb;
+            color: #6b7280;
+            font-weight: 600;
+            padding: 12px 30px;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-secondary:hover {
+            border-color: #d1d5db;
+            background: #f9fafb;
+            color: #374151;
+        }
+
+        .coin-balance {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: 600;
+            border: 2px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .footer {
+            background: var(--dark-color);
+            color: white;
+            padding: 3rem 0;
+            margin-top: 4rem;
+        }
+
+        .security-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: var(--success-color);
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .payment-container {
+                margin: 1rem;
+                border-radius: 16px;
+            }
+            
+            .payment-header {
+                padding: 1.5rem;
+            }
+            
+            .payment-body {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-rocket me-2"></i>Elite SMM
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/services"><i class="fas fa-shopping-bag me-1"></i>Services</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/orders"><i class="fas fa-list-alt me-1"></i>My Orders</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/balance"><i class="fas fa-wallet me-1"></i>Balance</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center">
+                    <span class="coin-balance me-3">
+                        <i class="fas fa-coins me-1"></i>{{ "{:,}".format(balance|int) }} coins
+                    </span>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ user.first_name or user.username or "User" }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/logout"><i class="fas fa-sign-out-alt me-1"></i>Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 100px;">
+        <div class="payment-container">
+            <div class="payment-header">
+                <h2><i class="fas fa-credit-card me-2"></i>Secure Payment</h2>
+                <p class="mb-0">Add funds to your account securely</p>
+            </div>
+            
+            <div class="payment-body">
+                <div class="payment-info">
+                    <h5><i class="fas fa-info-circle me-2"></i>Payment Details</h5>
+                    <div class="info-item">
+                        <span class="info-label">Amount (USD):</span>
+                        <span class="info-value">${{ "%.2f"|format(amount_usd) }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Coins to receive:</span>
+                        <span class="info-value">{{ "{:,}".format(coins_amount|int) }} coins</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Transaction ID:</span>
+                        <span class="info-value">#{{ transaction_id }}</span>
+                    </div>
+                </div>
+                
+                <h4 class="mb-3"><i class="fas fa-payment me-2"></i>Select Payment Method</h4>
+                
+                <form id="paymentForm" action="/process_payment" method="post">
+                    <input type="hidden" name="transaction_id" value="{{ transaction_id }}">
+                    <input type="hidden" name="amount_usd" value="{{ amount_usd }}">
+                    <input type="hidden" name="selected_method" id="selectedMethod" value="">
+                    
+                    {% if payment_methods %}
+                        {% for method in payment_methods %}
+                        <div class="payment-method" data-method="{{ method.name }}" onclick="selectMethod('{{ method.name }}')">
+                            <div class="method-content">
+                                <div class="method-info">
+                                    <h5>{{ method.display_name or method.name.title() }}</h5>
+                                    {% if method.name == 'paypal' %}
+                                        <small>Pay securely with PayPal worldwide</small>
+                                    {% elif method.name == 'crypto' %}
+                                        <small>Pay with Bitcoin, Ethereum, and more</small>
+                                    {% elif method.name == 'payme' %}
+                                        <small>Uzbekistan's leading payment system</small>
+                                    {% elif method.name == 'click' %}
+                                        <small>Fast and secure online payments</small>
+                                    {% elif method.name == 'uzcard' %}
+                                        <small>National payment card of Uzbekistan</small>
+                                    {% elif method.name == 'humo' %}
+                                        <small>Secure card payments in Uzbekistan</small>
+                                    {% else %}
+                                        <small>Secure online payment processing</small>
+                                    {% endif %}
+                                </div>
+                                <div class="method-icon">
+                                    {% if method.name == 'paypal' %}
+                                        <i class="fab fa-paypal text-primary"></i>
+                                    {% elif method.name == 'crypto' %}
+                                        <i class="fab fa-bitcoin text-warning"></i>
+                                    {% elif method.name == 'payme' %}
+                                        <i class="fas fa-mobile-alt text-info"></i>
+                                    {% elif method.name == 'click' %}
+                                        <i class="fas fa-credit-card text-success"></i>
+                                    {% elif method.name == 'uzcard' %}
+                                        <i class="fas fa-credit-card text-primary"></i>
+                                    {% elif method.name == 'humo' %}
+                                        <i class="fas fa-credit-card text-danger"></i>
+                                    {% else %}
+                                        <i class="fas fa-credit-card text-secondary"></i>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-warning text-center">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No payment methods available at the moment.
+                        </div>
+                    {% endif %}
+                    
+                    <div class="security-badge">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Secured by SSL encryption</span>
+                    </div>
+                    
+                    <div class="d-grid gap-3 mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg" id="payButton" disabled>
+                            <span class="button-text">
+                                <i class="fas fa-lock me-2"></i>Continue to Secure Payment
+                            </span>
+                            <div class="loading-spinner"></div>
+                        </button>
+                        <a href="/balance" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Balance
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-8">
+                    <h5><i class="fas fa-rocket me-2"></i>Elite SMM Services</h5>
+                    <p class="mb-3">Professional social media marketing services to grow your online presence. Fast, reliable, and affordable solutions for all major platforms.</p>
+                    <div class="d-flex gap-3">
+                        <span class="badge bg-primary"><i class="fas fa-shield-alt me-1"></i>Secure</span>
+                        <span class="badge bg-success"><i class="fas fa-bolt me-1"></i>Fast Delivery</span>
+                        <span class="badge bg-warning text-dark"><i class="fas fa-headset me-1"></i>24/7 Support</span>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end">
+                    <h5>Get Started</h5>
+                    <p class="mb-3">
+                        <a href="https://t.me/{{ bot_username }}" class="text-white text-decoration-none">
+                            <i class="fab fa-telegram me-2"></i>@{{ bot_username }}
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function selectMethod(method) {
+            // Remove selected class from all methods
+            document.querySelectorAll('.payment-method').forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked method
+            document.querySelector(`.payment-method[data-method="${method}"]`).classList.add('selected');
+            
+            // Set hidden input value
+            document.getElementById('selectedMethod').value = method;
+            
+            // Enable submit button
+            const payButton = document.getElementById('payButton');
+            payButton.disabled = false;
+            payButton.classList.remove('btn-secondary');
+            payButton.classList.add('btn-primary');
+        }
+
+        // Handle form submission with loading state
+        document.getElementById('paymentForm').addEventListener('submit', function() {
+            const button = document.getElementById('payButton');
+            const buttonText = button.querySelector('.button-text');
+            const spinner = button.querySelector('.loading-spinner');
+            
+            button.disabled = true;
+            buttonText.style.display = 'none';
+            spinner.style.display = 'inline-block';
+        });
+    </script>
+</body>
+</html>

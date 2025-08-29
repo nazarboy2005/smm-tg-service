@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite SMM Services - Payment Failed</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #8b5cf6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-color: #1f2937;
+            --light-color: #f8fafc;
+            --gradient: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            --danger-gradient: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        body {
+            background: var(--light-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background: rgba(31, 41, 55, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .failure-container {
+            max-width: 600px;
+            margin: 3rem auto;
+            text-align: center;
+        }
+
+        .failure-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            border: none;
+        }
+
+        .failure-header {
+            background: var(--danger-gradient);
+            color: white;
+            padding: 3rem 2rem;
+            position: relative;
+        }
+
+        .failure-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: shake 0.6s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% {
+                transform: translateX(0);
+            }
+            25% {
+                transform: translateX(-5px);
+            }
+            75% {
+                transform: translateX(5px);
+            }
+        }
+
+        .failure-header h2 {
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            font-size: 2.5rem;
+        }
+
+        .failure-body {
+            padding: 2.5rem;
+        }
+
+        .error-details {
+            background: linear-gradient(135deg, #fef2f2, #fef7f7);
+            border: 2px solid #fecaca;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.5rem 0;
+        }
+
+        .detail-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-label {
+            color: #374151;
+            font-weight: 600;
+        }
+
+        .detail-value {
+            font-weight: 700;
+            color: var(--danger-color);
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+            padding: 12px 20px;
+            border-radius: 50px;
+            font-weight: 600;
+            border: 2px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-primary {
+            background: var(--gradient);
+            border: none;
+            padding: 15px 30px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+        }
+
+        .btn-danger {
+            background: var(--danger-gradient);
+            border: none;
+            padding: 15px 30px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.6);
+        }
+
+        .support-text {
+            color: #6b7280;
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+
+        .troubleshooting {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+
+        .troubleshooting h5 {
+            color: var(--dark-color);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .troubleshoot-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+            color: #6b7280;
+        }
+
+        .troubleshoot-item i {
+            color: var(--primary-color);
+            margin-right: 0.75rem;
+            margin-top: 0.25rem;
+            width: 20px;
+            flex-shrink: 0;
+        }
+
+        .coin-balance {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: 600;
+            border: 2px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .contact-support {
+            background: linear-gradient(135deg, #eff6ff, #f0f9ff);
+            border: 2px solid #bfdbfe;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .contact-support h6 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .contact-support p {
+            color: #6b7280;
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+
+        @media (max-width: 768px) {
+            .failure-container {
+                margin: 1rem;
+            }
+            
+            .failure-header {
+                padding: 2rem 1.5rem;
+            }
+            
+            .failure-header h2 {
+                font-size: 2rem;
+            }
+            
+            .failure-body {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-rocket me-2"></i>Elite SMM
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/services"><i class="fas fa-shopping-bag me-1"></i>Services</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/orders"><i class="fas fa-list-alt me-1"></i>My Orders</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/balance"><i class="fas fa-wallet me-1"></i>Balance</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center">
+                    <span class="coin-balance me-3">
+                        <i class="fas fa-coins me-1"></i>{{ "{:,}".format(balance|int) }} coins
+                    </span>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ user.first_name or user.username or "User" }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/logout"><i class="fas fa-sign-out-alt me-1"></i>Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 100px;">
+        <div class="failure-container">
+            <div class="card failure-card">
+                <div class="failure-header">
+                    <div class="failure-icon">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <h2>Payment Failed</h2>
+                    <p class="mb-0">We couldn't process your payment</p>
+                </div>
+                
+                <div class="failure-body">
+                    <p class="support-text">
+                        Don't worry! Your payment was not charged and no money was deducted from your account.
+                    </p>
+                    
+                    <div class="error-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Transaction ID:</span>
+                            <span class="detail-value">#{{ transaction_id }}</span>
+                        </div>
+                        {% if error_message %}
+                        <div class="detail-item">
+                            <span class="detail-label">Error:</span>
+                            <span class="error-message">{{ error_message }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="detail-item">
+                            <span class="detail-label">Status:</span>
+                            <span class="detail-value">Failed</span>
+                        </div>
+                    </div>
+                    
+                    <div class="troubleshooting">
+                        <h5><i class="fas fa-tools me-2"></i>Common Solutions</h5>
+                        <div class="troubleshoot-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Verify your payment details are correct</span>
+                        </div>
+                        <div class="troubleshoot-item">
+                            <i class="fas fa-credit-card"></i>
+                            <span>Ensure sufficient funds in your account</span>
+                        </div>
+                        <div class="troubleshoot-item">
+                            <i class="fas fa-wifi"></i>
+                            <span>Check your internet connection</span>
+                        </div>
+                        <div class="troubleshoot-item">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Contact your bank if payment is blocked</span>
+                        </div>
+                        <div class="troubleshoot-item">
+                            <i class="fas fa-redo"></i>
+                            <span>Try a different payment method</span>
+                        </div>
+                    </div>
+                    
+                    <div class="contact-support">
+                        <h6><i class="fas fa-headset me-2"></i>Need Help?</h6>
+                        <p>Our support team is available 24/7 to assist you with payment issues. Contact us via Telegram for immediate assistance.</p>
+                    </div>
+                    
+                    <div class="d-grid gap-3">
+                        <a href="/balance" class="btn btn-danger btn-lg">
+                            <i class="fas fa-redo me-2"></i>Try Again
+                        </a>
+                        <div class="row">
+                            <div class="col-6">
+                                <a href="/" class="btn btn-primary w-100">
+                                    <i class="fas fa-home me-1"></i>Dashboard
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="https://t.me/{{ bot_username }}" class="btn btn-outline-primary w-100">
+                                    <i class="fas fa-life-ring me-1"></i>Support
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

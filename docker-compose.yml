@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: smm_bot_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-smm_bot}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - bot_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: smm_bot_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - bot_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # SMM Bot Application
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smm_bot_app
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-smm_bot}
+      - REDIS_URL=redis://redis:6379/0
+      - JAP_API_URL=${JAP_API_URL}
+      - JAP_API_KEY=${JAP_API_KEY}
+      # Stripe removed as per requirements
+      - COINGATE_API_TOKEN=${COINGATE_API_TOKEN}
+      - COINGATE_SANDBOX=${COINGATE_SANDBOX:-true}
+      - PAYME_MERCHANT_ID=${PAYME_MERCHANT_ID}
+      - PAYME_SECRET_KEY=${PAYME_SECRET_KEY}
+      - CLICK_MERCHANT_ID=${CLICK_MERCHANT_ID}
+      - CLICK_SECRET_KEY=${CLICK_SECRET_KEY}
+      - COINS_PER_USD=${COINS_PER_USD:-1000}
+      - DEFAULT_REFERRAL_BONUS=${DEFAULT_REFERRAL_BONUS:-10}
+      - MIN_DEPOSIT_USD=${MIN_DEPOSIT_USD:-1}
+      - MAX_DEPOSIT_USD=${MAX_DEPOSIT_USD:-1000}
+      - SECRET_KEY=${SECRET_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bot_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Webhook server (if using webhooks instead of polling)
+  webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook
+    container_name: smm_bot_webhook
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-smm_bot}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - WEBHOOK_HOST=${WEBHOOK_HOST:-0.0.0.0}
+      - WEBHOOK_PORT=${WEBHOOK_PORT:-8000}
+    ports:
+      - "${WEBHOOK_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bot_network
+    restart: unless-stopped
+    profiles:
+      - webhook
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: smm_bot_nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - webhook
+    networks:
+      - bot_network
+    restart: unless-stopped
+    profiles:
+      - nginx
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  bot_network:
+    driver: bridge

@@ -1,0 +1,19 @@
+aiogram
+asyncpg
+alembic
+SQLAlchemy[asyncio]
+python-dotenv
+aiohttp
+cryptography
+redis
+pydantic
+pydantic-settings
+Pillow
+qrcode
+httpx
+loguru
+# stripe  # Removed as per requirements
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
