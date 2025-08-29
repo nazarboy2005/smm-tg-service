@@ -9,6 +9,8 @@ from loguru import logger
 
 from bot.config import settings
 from bot.database.models import Base
+from bot.database.pgbouncer_fix import apply_pgbouncer_compatibility
+from bot.database.pgbouncer_fix import apply_pgbouncer_compatibility
 
 
 class DatabaseManager:
@@ -25,29 +27,22 @@ class DatabaseManager:
             return
         
         try:
-            # Create async engine with Railway/pgbouncer compatible settings
-            connect_args = {
-                "server_settings": {
-                    "application_name": "follower-tg-service",
-                },
-                "command_timeout": 60,
-            }
-            
-            # Only add statement cache settings if not using pgbouncer
-            if "pgbouncer" not in settings.database_url.lower():
-                connect_args.update({
-                    "statement_cache_size": 0,
-                    "prepared_statement_cache_size": 0,
-                })
-            
+            # Create async engine with complete pgbouncer compatibility
+            # The database URL should already have statement_cache_size=0 from config validation
             self.engine = create_async_engine(
                 settings.database_url,
                 echo=settings.environment == "development",
                 pool_pre_ping=True,
-                pool_recycle=3600,
-                pool_size=5,  # Reduced for Railway
-                max_overflow=10,  # Reduced for Railway
-                connect_args=connect_args
+                pool_recycle=300,  # Shorter for pgbouncer compatibility
+                pool_size=3,  # Small pool for pgbouncer
+                max_overflow=5,  # Limited overflow for pgbouncer
+                connect_args={
+                    "command_timeout": 30,  # Reasonable timeout
+                },
+                # Disable query compilation caching for pgbouncer
+                execution_options={
+                    "compiled_cache": {},
+                }
             )
             
             # Create session maker
@@ -57,8 +52,11 @@ class DatabaseManager:
                 expire_on_commit=False
             )
             
+            # Apply pgbouncer compatibility fixes
+            apply_pgbouncer_compatibility(self.engine)
+            
             self._initialized = True
-            logger.info("Database connection initialized successfully")
+            logger.info("Database connection initialized successfully with pgbouncer compatibility")
             
         except Exception as e:
             logger.error(f"Failed to initialize database connection: {e}")

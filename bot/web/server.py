@@ -40,6 +40,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Add session middleware for user sessions
+from starlette.middleware.sessions import SessionMiddleware
+app.add_middleware(
+    SessionMiddleware, 
+    secret_key=settings.secret_key,
+    max_age=86400  # 24 hours
+)
+
 # Setup templates and static files
 templates_dir = os.path.join(os.path.dirname(__file__), "templates")
 static_dir = os.path.join(os.path.dirname(__file__), "static")

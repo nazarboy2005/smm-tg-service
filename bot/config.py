@@ -148,16 +148,28 @@ class Settings(BaseSettings):
     @field_validator('database_url', mode='after')
     @classmethod
     def validate_database_url(cls, v):
-        """Ensure database URL uses async driver and disable statement caching"""
+        """Ensure database URL uses async driver and is completely pgbouncer compatible"""
         if v.startswith('postgresql://'):
             # Convert to async PostgreSQL URL
             v = v.replace('postgresql://', 'postgresql+asyncpg://', 1)
             
-            # Add statement cache size parameter to disable prepared statement caching
+            # Add ALL necessary parameters for complete pgbouncer compatibility
+            # These parameters completely disable prepared statement functionality
+            cache_params = [
+                'statement_cache_size=0',           # Disable statement caching
+                'prepared_statement_cache_size=0',   # Disable prepared statement caching
+                'command_timeout=60'                 # Set reasonable timeout
+            ]
+            
             if '?' not in v:
-                v += '?statement_cache_size=0'
+                v += '?' + '&'.join(cache_params)
             else:
-                v += '&statement_cache_size=0'
+                # Check if parameters already exist to avoid duplicates
+                existing_params = v.split('?')[1] if '?' in v else ''
+                for param in cache_params:
+                    param_name = param.split('=')[0]
+                    if param_name not in existing_params:
+                        v += '&' + param
         
         return v
 
