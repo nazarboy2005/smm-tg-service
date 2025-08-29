@@ -143,9 +143,9 @@ async def main():
                 logger.info("Shutting down webhook bot...")
                 await bot.delete_webhook()
         else:
-            # Use polling mode
+            # Use polling mode with drop_pending_updates to avoid conflicts
             logger.info("Starting bot in polling mode...")
-            await dp.start_polling(bot)
+            await dp.start_polling(bot, drop_pending_updates=True)
         
     except Exception as e:
         logger.error(f"Error starting bot: {e}")

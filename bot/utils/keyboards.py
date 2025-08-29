@@ -25,97 +25,97 @@ def get_language_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_main_menu_keyboard(language: Language, is_admin: bool = False) -> InlineKeyboardMarkup:
-    """Create professional main menu keyboard with social media platforms"""
+    """Create premium main menu keyboard with modern social media platform styling"""
     builder = InlineKeyboardBuilder()
     
-    # Social media platform buttons - clean professional icons
+    # Premium social media platform buttons with brand colors in mind
     builder.button(
-        text=f"📱 {get_text('telegram_services', language)}",
+        text=f"💎 {get_text('telegram_services', language)}",
         callback_data="platform_telegram"
     )
     builder.button(
-        text=f"📸 {get_text('instagram_services', language)}",
+        text=f"🌟 {get_text('instagram_services', language)}",
         callback_data="platform_instagram"
     )
     builder.button(
-        text=f"🎵 {get_text('tiktok_services', language)}",
+        text=f"🚀 {get_text('tiktok_services', language)}",
         callback_data="platform_tiktok"
     )
     builder.button(
-        text=f"▶️ {get_text('youtube_services', language)}",
+        text=f"🎯 {get_text('youtube_services', language)}",
         callback_data="platform_youtube"
     )
     
-    # User account buttons - professional styling
+    # Premium user account section with modern icons
     builder.button(
-        text=f"💳 {get_text('balance', language)}",
+        text=f"💰 {get_text('balance', language)}",
         callback_data="menu_balance"
     )
     builder.button(
-        text=f"📊 {get_text('orders', language)}",
+        text=f"📈 {get_text('orders', language)}",
         callback_data="menu_orders"
     )
     
-    # Popular services button
+    # Featured services with premium styling
     builder.button(
-        text=f"⭐ {get_text('popular_services', language)}",
+        text=f"🔥 {get_text('popular_services', language)}",
         callback_data="menu_popular"
     )
     
-    # Additional buttons - clean design
+    # Premium additional features
     builder.button(
-        text=f"👤 {get_text('referrals', language)}",
+        text=f"🎁 {get_text('referrals', language)}",
         callback_data="menu_referrals"
     )
     builder.button(
-        text=f"⚙️ {get_text('settings', language)}",
+        text=f"⚡ {get_text('settings', language)}",
         callback_data="menu_settings"
     )
     builder.button(
-        text=f"💬 {get_text('support', language)}",
+        text=f"🛟 {get_text('support', language)}",
         callback_data="menu_support"
     )
     
-    # Admin menu item
+    # Premium admin menu with distinct styling
     if is_admin:
         builder.button(
-            text=f"🔧 {get_text('admin_menu', language)}",
+            text=f"👑 {get_text('admin_menu', language)}",
             callback_data="menu_admin"
         )
     
-    # Professional layout: 2 columns for platforms, 2 columns for account features
+    # Premium layout: organized grid for optimal user experience
     if is_admin:
-        builder.adjust(2, 2, 2, 2, 2, 1)  # Organized 2-column layout with admin
+        builder.adjust(2, 2, 1, 2, 2, 1)  # Premium layout with visual hierarchy
     else:
-        builder.adjust(2, 2, 2, 2, 1)  # Organized 2-column layout
+        builder.adjust(2, 2, 1, 2, 1)  # Clean premium layout
     
     return builder.as_markup()
 
 
 def get_balance_menu_keyboard(language: Language) -> InlineKeyboardMarkup:
-    """Create professional balance menu keyboard"""
+    """Create premium balance menu keyboard with modern financial styling"""
     builder = InlineKeyboardBuilder()
     
     builder.button(
-        text=f"💳 {get_text('add_balance', language)}",
+        text=f"💎 {get_text('add_balance', language)}",
         callback_data="balance_add"
     )
     builder.button(
-        text=f"📊 {get_text('transaction_history', language)}",
+        text=f"📈 {get_text('transaction_history', language)}",
         callback_data="balance_history"
     )
     builder.button(
-        text=f"← {get_text('back', language)}",
+        text=f"🔙 {get_text('back', language)}",
         callback_data="menu_main"
     )
     
-    # Clean layout: 2 columns for actions, 1 column for back
+    # Premium layout: organized for financial operations
     builder.adjust(2, 1)
     return builder.as_markup()
 
 
 async def get_payment_methods_keyboard(db: AsyncSession, language: Language) -> InlineKeyboardMarkup:
-    """Create professional payment methods keyboard based on enabled methods"""
+    """Create premium payment methods keyboard with modern financial icons"""
     from bot.services.settings_service import SettingsService
     
     builder = InlineKeyboardBuilder()
@@ -128,10 +128,10 @@ async def get_payment_methods_keyboard(db: AsyncSession, language: Language) -> 
     uzcard_enabled = await SettingsService.get_setting(db, "uzcard_enabled", False)
     humo_enabled = await SettingsService.get_setting(db, "humo_enabled", False)
     
-    # Add buttons only for enabled payment methods - professional styling
+    # Premium payment method buttons with distinctive icons
     if paypal_enabled:
         builder.button(
-            text=f"💳 {get_text('payment_paypal', language)}",
+            text=f"🌐 {get_text('payment_paypal', language)}",
             callback_data="payment_paypal"
         )
     
@@ -143,13 +143,13 @@ async def get_payment_methods_keyboard(db: AsyncSession, language: Language) -> 
     
     if payme_enabled:
         builder.button(
-            text=f"📱 {get_text('payment_payme', language)}",
+            text=f"📲 {get_text('payment_payme', language)}",
             callback_data="payment_payme"
         )
     
     if click_enabled:
         builder.button(
-            text=f"💳 {get_text('payment_click', language)}",
+            text=f"💫 {get_text('payment_click', language)}",
             callback_data="payment_click"
         )
     
@@ -161,104 +161,104 @@ async def get_payment_methods_keyboard(db: AsyncSession, language: Language) -> 
     
     if humo_enabled:
         builder.button(
-            text=f"💳 {get_text('payment_humo', language)}",
+            text=f"🏦 {get_text('payment_humo', language)}",
             callback_data="payment_humo"
         )
     
     builder.button(
-        text=f"← {get_text('back', language)}",
+        text=f"🔙 {get_text('back', language)}",
         callback_data="menu_balance"
     )
     
-    # Professional layout based on number of buttons
+    # Premium layout optimized for payment selection
     button_count = sum([paypal_enabled, crypto_enabled, payme_enabled, click_enabled, uzcard_enabled, humo_enabled])
     
     if button_count > 4:
-        builder.adjust(2, 2, 2, 1)  # 2x3 grid + back button
+        builder.adjust(2, 2, 2, 1)  # Premium grid layout
     elif button_count > 2:
-        builder.adjust(2, 2, 1)  # 2x2 grid + back button
+        builder.adjust(2, 2, 1)  # Balanced layout
     else:
-        builder.adjust(2, 1)  # Single row + back button
+        builder.adjust(2, 1)  # Compact layout
     
     return builder.as_markup()
 
 
 def get_platform_services_keyboard(platform: str, language: Language) -> InlineKeyboardMarkup:
-    """Create professional keyboard for platform-specific services"""
+    """Create premium platform-specific services keyboard with modern styling"""
     builder = InlineKeyboardBuilder()
     
-    # Platform-specific professional icons
+    # Premium platform-specific icons that reflect service quality
     platform_icons = {
-        "telegram": "📱",
-        "instagram": "📸",
-        "tiktok": "🎵",
-        "youtube": "▶️",
-        "twitter": "🐦",
-        "facebook": "🔗"
+        "telegram": "💎",
+        "instagram": "🌟", 
+        "tiktok": "🚀",
+        "youtube": "🎯",
+        "twitter": "💫",
+        "facebook": "🔥"
     }
     
-    icon = platform_icons.get(platform.lower(), "🛍️")
+    icon = platform_icons.get(platform.lower(), "⚡")
     
-    # Professional service buttons for each platform
+    # Premium service buttons with engaging icons
     if platform.lower() == "telegram":
         builder.button(
             text=f"{icon} {get_text('members', language)}",
             callback_data=f"platform_service_telegram_members"
         )
         builder.button(
-            text=f"{icon} {get_text('views', language)}",
+            text=f"👁️ {get_text('views', language)}",
             callback_data=f"platform_service_telegram_views"
         )
     elif platform.lower() == "instagram":
         builder.button(
-            text=f"{icon} {get_text('followers', language)}",
+            text=f"👥 {get_text('followers', language)}",
             callback_data=f"platform_service_instagram_followers"
         )
         builder.button(
-            text=f"{icon} {get_text('likes', language)}",
+            text=f"❤️ {get_text('likes', language)}",
             callback_data=f"platform_service_instagram_likes"
         )
         builder.button(
-            text=f"{icon} {get_text('comments', language)}",
+            text=f"💬 {get_text('comments', language)}",
             callback_data=f"platform_service_instagram_comments"
         )
     elif platform.lower() == "tiktok":
         builder.button(
-            text=f"{icon} {get_text('followers', language)}",
+            text=f"👥 {get_text('followers', language)}",
             callback_data=f"platform_service_tiktok_followers"
         )
         builder.button(
-            text=f"{icon} {get_text('likes', language)}",
+            text=f"💖 {get_text('likes', language)}",
             callback_data=f"platform_service_tiktok_likes"
         )
         builder.button(
-            text=f"{icon} {get_text('views', language)}",
+            text=f"👁️ {get_text('views', language)}",
             callback_data=f"platform_service_tiktok_views"
         )
     elif platform.lower() == "youtube":
         builder.button(
-            text=f"{icon} {get_text('subscribers', language)}",
+            text=f"👥 {get_text('subscribers', language)}",
             callback_data=f"platform_service_youtube_subscribers"
         )
         builder.button(
-            text=f"{icon} {get_text('views', language)}",
+            text=f"👁️ {get_text('views', language)}",
             callback_data=f"platform_service_youtube_views"
         )
         builder.button(
-            text=f"{icon} {get_text('likes', language)}",
+            text=f"👍 {get_text('likes', language)}",
             callback_data=f"platform_service_youtube_likes"
         )
     
     builder.button(
-        text=f"← {get_text('back', language)}",
+        text=f"🔙 {get_text('back', language)}",
         callback_data="menu_main"
     )
     
-    # Professional layout based on platform type
+    # Premium layout optimized for service selection
     if platform.lower() in ["instagram", "tiktok", "youtube"]:
-        builder.adjust(2, 2, 1)  # 2x2 grid for services + back button
+        builder.adjust(2, 2, 1)  # Premium 2x2 grid + navigation
     else:
-        builder.adjust(2, 1)  # 2 buttons per row + back button
+        builder.adjust(2, 1)  # Clean dual-column layout
     
     return builder.as_markup()
 
@@ -326,33 +326,33 @@ def get_order_confirmation_keyboard(language: Language) -> InlineKeyboardMarkup:
 
 
 def get_popular_services_keyboard(language: Language) -> InlineKeyboardMarkup:
-    """Create professional popular services keyboard"""
+    """Create premium popular services keyboard with trending styling"""
     builder = InlineKeyboardBuilder()
     
-    # Popular services with professional styling
+    # Premium trending services with eye-catching icons
     builder.button(
-        text=f"📱 Telegram {get_text('members', language)}",
+        text=f"💎 Telegram {get_text('members', language)}",
         callback_data="popular_telegram_members"
     )
     builder.button(
-        text=f"▶️ YouTube {get_text('views', language)}",
+        text=f"🎯 YouTube {get_text('views', language)}",
         callback_data="popular_youtube_views"
     )
     builder.button(
-        text=f"🎵 TikTok {get_text('views', language)}",
+        text=f"🚀 TikTok {get_text('views', language)}",
         callback_data="popular_tiktok_views"
     )
     builder.button(
-        text=f"📸 Instagram {get_text('likes', language)}",
+        text=f"🌟 Instagram {get_text('likes', language)}",
         callback_data="popular_instagram_likes"
     )
     
     builder.button(
-        text=f"← {get_text('back', language)}",
+        text=f"🔙 {get_text('back', language)}",
         callback_data="menu_main"
     )
     
-    builder.adjust(2, 2, 1)  # Professional 2x2 grid + back button
+    builder.adjust(2, 2, 1)  # Premium grid layout for trending services
     return builder.as_markup()
 
 

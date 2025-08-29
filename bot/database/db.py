@@ -25,7 +25,7 @@ class DatabaseManager:
             return
         
         try:
-            # Create async engine with proper connection args
+            # Create async engine with proper connection args for pgbouncer compatibility
             self.engine = create_async_engine(
                 settings.database_url,
                 echo=settings.environment == "development",
@@ -33,15 +33,19 @@ class DatabaseManager:
                 pool_recycle=3600,
                 pool_size=10,
                 max_overflow=20,
+                # Disable all statement caching for pgbouncer compatibility
                 connect_args={
                     "server_settings": {
                         "application_name": "follower-tg-service",
                         "statement_timeout": "60000",  # 60 seconds
                         "lock_timeout": "30000",  # 30 seconds
                     },
-                    "statement_cache_size": 0,
-                    "prepared_statement_cache_size": 0,
-                    "command_timeout": 60
+                    "statement_cache_size": 0,  # Disable statement cache
+                    "prepared_statement_cache_size": 0,  # Disable prepared statement cache
+                    "command_timeout": 60,
+                    # Additional pgbouncer compatibility settings
+                    "statement_cache_mode": "none",
+                    "prepared_statement_name_func": None,
                 }
             )
             
