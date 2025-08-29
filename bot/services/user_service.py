@@ -183,17 +183,6 @@ class UserService:
                 # Log welcome bonus
                 if welcome_bonus > 0:
                     logger.info(f"Added welcome bonus of {welcome_bonus} coins to user {user.id}")
-                
-                # Create transaction record for the welcome bonus
-                from bot.services.balance_service import BalanceService
-                await BalanceService.add_transaction(
-                    db=db,
-                    user_id=user.id,
-                    amount=float(welcome_bonus),
-                    transaction_type=TransactionType.ADMIN_ADJUSTMENT,
-                    description="Welcome bonus",
-                    status=TransactionStatus.COMPLETED
-                )
             
                 await db.commit()
                 

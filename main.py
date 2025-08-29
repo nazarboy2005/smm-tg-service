@@ -102,14 +102,50 @@ async def main():
         
         # Start web server in a separate thread - always enabled for better UX
         logger.info("Starting web server...")
+        
+        # Set bot and dispatcher for webhook handling
+        from bot.web.server import set_bot_and_dispatcher
+        set_bot_and_dispatcher(bot, dp)
+        
         web_thread = threading.Thread(target=start_web_server)
         web_thread.daemon = True
         web_thread.start()
         logger.info("Web server started on port 8000")
         
-        # Start polling
-        logger.info("Bot started successfully")
-        await dp.start_polling(bot)
+        # Check if we should use webhook or polling
+        webhook_url = getattr(settings, 'webhook_url', None)
+        use_webhook = getattr(settings, 'use_webhook', False)
+        
+        if use_webhook and webhook_url:
+            # Set up webhook
+            logger.info(f"Setting up webhook at: {webhook_url}")
+            await bot.set_webhook(
+                url=f"{webhook_url}/webhook",
+                drop_pending_updates=True,
+                secret_token=settings.webhook_secret if hasattr(settings, 'webhook_secret') else None
+            )
+            logger.info("Webhook set successfully. Bot is now running in webhook mode.")
+            
+            # Keep the main thread alive
+            import signal
+            def signal_handler(signum, frame):
+                logger.info("Received shutdown signal")
+                raise KeyboardInterrupt
+            
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+            
+            # Wait indefinitely
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Shutting down webhook bot...")
+                await bot.delete_webhook()
+        else:
+            # Use polling mode
+            logger.info("Starting bot in polling mode...")
+            await dp.start_polling(bot)
         
     except Exception as e:
         logger.error(f"Error starting bot: {e}")

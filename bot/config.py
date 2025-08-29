@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     web_host: str = Field(default="0.0.0.0", env="WEB_HOST")
     web_base_url: str = Field(default="http://localhost:8000", env="WEB_BASE_URL")
     
+    # Webhook Configuration
+    use_webhook: bool = Field(default=False, env="USE_WEBHOOK")
+    webhook_url: str = Field(default="", env="WEBHOOK_URL")
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

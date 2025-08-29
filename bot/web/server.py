@@ -22,6 +22,16 @@ from bot.services.service_service import ServiceService
 from bot.database.models import TransactionStatus
 from bot.config import settings
 
+# Global bot and dispatcher references (will be set from main.py)
+bot = None
+dp = None
+
+def set_bot_and_dispatcher(bot_instance, dp_instance):
+    """Set bot and dispatcher instances for webhook handling"""
+    global bot, dp
+    bot = bot_instance
+    dp = dp_instance
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -41,6 +51,36 @@ if not os.path.exists(static_dir):
 
 templates = Jinja2Templates(directory=templates_dir)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    """Handle Telegram webhook updates"""
+    try:
+        # Verify webhook secret if configured
+        if hasattr(settings, 'webhook_secret') and settings.webhook_secret:
+            secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+            if secret_header != settings.webhook_secret:
+                logger.warning("Invalid webhook secret token")
+                raise HTTPException(status_code=403, detail="Invalid secret token")
+        
+        # Get update data
+        update_data = await request.json()
+        
+        # Process update if bot and dispatcher are available
+        if bot and dp:
+            from aiogram.types import Update
+            update = Update(**update_data)
+            await dp.feed_update(bot, update)
+        else:
+            logger.error("Bot or dispatcher not initialized for webhook")
+            raise HTTPException(status_code=500, detail="Bot not ready")
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def validate_telegram_data(data: Dict[str, Any]) -> bool:

@@ -401,10 +401,20 @@ async def handle_platform_service_selection(callback: CallbackQuery, state: FSMC
                                 reply_markup=get_service_categories_keyboard(categories, language)
                             )
                         else:
-                            await callback.message.edit_text(
-                                get_text("no_services", language),
-                                reply_markup=get_back_keyboard(language, "menu_main")
-                            )
+                            # Create demo services if none exist
+                            await ServiceService.create_demo_categories_and_services(db)
+                            categories = await ServiceService.get_active_categories(db)
+                            
+                            if categories:
+                                await callback.message.edit_text(
+                                    get_text("choose_category", language),
+                                    reply_markup=get_service_categories_keyboard(categories, language)
+                                )
+                            else:
+                                await callback.message.edit_text(
+                                    get_text("no_services", language),
+                                    reply_markup=get_back_keyboard(language, "menu_main")
+                                )
                 break
     except Exception as e:
         logger.error(f"Error in platform service selection: {e}")
