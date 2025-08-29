@@ -187,9 +187,34 @@ async def index(
 ):
     """Main page"""
     if not user:
-        # Redirect to Telegram bot
-        bot_url = f"https://t.me/{settings.bot_username}"
-        return RedirectResponse(url=bot_url)
+        # Return simple HTML instead of redirect to avoid 307 loop
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Elite JAP Bot</title>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                    .container {{ max-width: 500px; margin: 0 auto; }}
+                    .btn {{ background: #0088cc; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🚀 Elite JAP Bot</h1>
+                    <p>Welcome to the premium SMM services platform</p>
+                    <p>Please start the bot to access your dashboard:</p>
+                    <a href="https://t.me/{settings.bot_username}" class="btn">Start Bot</a>
+                    <p><small>After starting the bot, you'll be able to access this dashboard</small></p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=200
+        )
     
     # Get user data
     async for db in get_db():
@@ -197,7 +222,14 @@ async def index(
         break
     
     if not user_db:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "bot_username": settings.bot_username if hasattr(settings, 'bot_username') else "your_bot",
+                "login_url": f"https://t.me/{settings.bot_username if hasattr(settings, 'bot_username') else 'your_bot'}"
+            }
+        )
     
     # Get user balance
     balance = await BalanceService.get_user_balance(db, user_db.id)

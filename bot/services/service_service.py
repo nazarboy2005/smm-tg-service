@@ -281,6 +281,14 @@ class ServiceService:
         try:
             logger.info("Creating demo categories and services")
             
+            # Check if categories already exist to avoid duplicates
+            existing_count = await db.execute(
+                select(func.count(ServiceCategory.id))
+            )
+            if existing_count.scalar() > 0:
+                logger.info("Demo categories already exist, skipping creation")
+                return True
+            
             # Create demo categories
             categories = {
                 "Instagram": "Instagram followers, likes, comments, and views",
@@ -293,18 +301,23 @@ class ServiceService:
             
             created_categories = {}
             
-            # Create categories
+            # Create categories with proper transaction handling
             for name, description in categories.items():
-                category = ServiceCategory(
-                    name=name,
-                    description=description,
-                    is_active=True,
-                    sort_order=list(categories.keys()).index(name)
-                )
-                db.add(category)
-                await db.flush()
-                created_categories[name] = category.id
-                logger.info(f"Created demo category: {name} (ID: {category.id})")
+                try:
+                    category = ServiceCategory(
+                        name=name,
+                        description=description,
+                        is_active=True,
+                        sort_order=list(categories.keys()).index(name)
+                    )
+                    db.add(category)
+                    await db.flush()  # Flush to get ID
+                    created_categories[name] = category.id
+                    logger.info(f"Created demo category: {name} (ID: {category.id})")
+                except Exception as e:
+                    logger.warning(f"Failed to create category {name}: {e}")
+                    await db.rollback()
+                    return False
             
             # Create demo services with pricing according to requirements
             services_data = [
@@ -339,26 +352,33 @@ class ServiceService:
                 {"category": "Facebook", "name": "Facebook Followers | Max 50K | Real", "price": 12000, "min": 100, "max": 50000}
             ]
             
-            # Create services
+            # Create services with proper error handling
+            services_created = 0
             for i, service_data in enumerate(services_data):
-                category_id = created_categories.get(service_data["category"])
-                if category_id:
-                    service = Service(
-                        category_id=category_id,
-                        jap_service_id=10000 + i,  # Create fake JAP service IDs starting from 10000
-                        name=service_data["name"],
-                        description=f"High-quality {service_data['name'].split('|')[0].strip()} service",
-                        price_per_1000=service_data["price"],
-                        min_quantity=service_data["min"],
-                        max_quantity=service_data["max"],
-                        is_active=True,
-                        sort_order=i % 10  # Sort within category
-                    )
-                    db.add(service)
-                    logger.info(f"Created demo service: {service_data['name']}")
+                try:
+                    category_id = created_categories.get(service_data["category"])
+                    if category_id:
+                        service = Service(
+                            category_id=category_id,
+                            jap_service_id=10000 + i,  # Create fake JAP service IDs starting from 10000
+                            name=service_data["name"],
+                            description=f"High-quality {service_data['name'].split('|')[0].strip()} service",
+                            price_per_1000=service_data["price"],
+                            min_quantity=service_data["min"],
+                            max_quantity=service_data["max"],
+                            is_active=True,
+                            sort_order=i % 10  # Sort within category
+                        )
+                        db.add(service)
+                        services_created += 1
+                        logger.info(f"Created demo service: {service_data['name']}")
+                except Exception as e:
+                    logger.warning(f"Failed to create service {service_data['name']}: {e}")
+                    continue
             
+            # Commit all changes at once
             await db.commit()
-            logger.info("Demo categories and services created successfully")
+            logger.info(f"Demo categories and services created successfully ({services_created} services)")
             return True
             
         except Exception as e:
