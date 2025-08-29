@@ -40,12 +40,9 @@ class DatabaseManager:
                         "statement_timeout": "60000",  # 60 seconds
                         "lock_timeout": "30000",  # 30 seconds
                     },
-                    "statement_cache_size": 0,  # Disable statement cache
+                    "statement_cache_size": 0,  # Disable statement cache for pgbouncer
                     "prepared_statement_cache_size": 0,  # Disable prepared statement cache
                     "command_timeout": 60,
-                    # Additional pgbouncer compatibility settings
-                    "statement_cache_mode": "none",
-                    "prepared_statement_name_func": None,
                 }
             )
             

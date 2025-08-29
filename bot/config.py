@@ -71,14 +71,14 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", env="ENVIRONMENT")
     
     # Web Server
-    enable_web_server: bool = Field(default=False, env="ENABLE_WEB_SERVER")
+    enable_web_server: bool = Field(default=True, env="ENABLE_WEB_SERVER")
     web_port: int = Field(default=8000, env="WEB_PORT")
     web_host: str = Field(default="0.0.0.0", env="WEB_HOST")
-    web_base_url: str = Field(default="http://localhost:8000", env="WEB_BASE_URL")
+    web_base_url: str = Field(default="https://smm-tg-service-production.up.railway.app", env="WEB_BASE_URL")
     
     # Webhook Configuration
-    use_webhook: bool = Field(default=False, env="USE_WEBHOOK")
-    webhook_url: str = Field(default="", env="WEBHOOK_URL")
+    use_webhook: bool = Field(default=True, env="USE_WEBHOOK")
+    webhook_url: str = Field(default="https://smm-tg-service-production.up.railway.app", env="WEBHOOK_URL")
     
     class Config:
         env_file = ".env"

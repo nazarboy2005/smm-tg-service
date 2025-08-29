@@ -480,13 +480,18 @@ def start_web_server():
     """Start web server"""
     import uvicorn
     
-    # Get port from environment or use default
-    port = int(os.environ.get("WEB_PORT", 8000))
+    # Get port from environment or Railway's PORT variable, use default as fallback
+    port = int(os.environ.get("PORT", os.environ.get("WEB_PORT", 8000)))
     
-    # Start server
+    logger.info(f"Starting web server on 0.0.0.0:{port}")
+    
+    # Start server with Railway-compatible configuration
     uvicorn.run(
         "bot.web.server:app",
         host="0.0.0.0",
         port=port,
-        reload=settings.environment == "development"
+        reload=settings.environment == "development",
+        access_log=True,
+        server_header=False,
+        date_header=False
     )
