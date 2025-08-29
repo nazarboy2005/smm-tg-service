@@ -249,17 +249,17 @@ async def index(
     # Get popular services
     popular_services = await ServiceService.get_popular_services(db, limit=4)
     
-        return templates.TemplateResponse(
-            "index.html",
-            {
-                "request": request,
-                "user": user,
-                "balance": balance,
-                "orders": orders,
-                "popular_services": popular_services,
-                "bot_username": "nimadirishqiladiganbot"
-            }
-        )
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "user": user,
+            "balance": balance,
+            "orders": orders,
+            "popular_services": popular_services,
+            "bot_username": "nimadirishqiladiganbot"
+        }
+    )
 
 
 @app.get("/services", response_class=HTMLResponse)
@@ -374,19 +374,19 @@ async def payment_page(
         coins_amount = transaction.amount
         break
     
-        return templates.TemplateResponse(
-            "payment.html",
-            {
-                "request": request,
-                "user": user,
-                "balance": balance,
-                "transaction_id": transaction_id,
-                "amount_usd": transaction.usd_amount,
-                "coins_amount": coins_amount,
-                "payment_methods": payment_methods,
-                "bot_username": "nimadirishqiladiganbot"
-            }
-        )
+    return templates.TemplateResponse(
+        "payment.html",
+        {
+            "request": request,
+            "user": user,
+            "balance": balance,
+            "transaction_id": transaction_id,
+            "amount_usd": transaction.usd_amount,
+            "coins_amount": coins_amount,
+            "payment_methods": payment_methods,
+            "bot_username": "nimadirishqiladiganbot"
+        }
+    )
 
 
 @app.post("/process_payment")
