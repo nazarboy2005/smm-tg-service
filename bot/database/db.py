@@ -10,7 +10,6 @@ from loguru import logger
 from bot.config import settings
 from bot.database.models import Base
 from bot.database.pgbouncer_fix import apply_pgbouncer_compatibility
-from bot.database.pgbouncer_fix import apply_pgbouncer_compatibility
 
 
 class DatabaseManager:

@@ -142,10 +142,13 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db)
 ) -> Optional[Dict[str, Any]]:
     """Get current user from session or Telegram login data"""
-    # Check session first
-    user_data = request.session.get("user")
-    if user_data:
-        return user_data
+    try:
+        # Check session first
+        user_data = request.session.get("user")
+        if user_data:
+            return user_data
+    except Exception as e:
+        logger.warning(f"Session access failed: {e}")
     
     # Check for Telegram login data
     tg_data = {}
@@ -154,19 +157,25 @@ async def get_current_user(
     
     # Validate Telegram login data
     if tg_data and "id" in tg_data and validate_telegram_data(tg_data):
-        # Get user from database
-        user = await UserService.get_user_by_telegram_id(db, int(tg_data["id"]))
-        if user:
-            user_data = {
-                "id": user.id,
-                "telegram_id": user.telegram_id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "is_admin": user.is_admin
-            }
-            request.session["user"] = user_data
-            return user_data
+        try:
+            # Get user from database
+            user = await UserService.get_user_by_telegram_id(db, int(tg_data["id"]))
+            if user:
+                user_data = {
+                    "id": user.id,
+                    "telegram_id": user.telegram_id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "is_admin": user.is_admin
+                }
+                try:
+                    request.session["user"] = user_data
+                except Exception as e:
+                    logger.warning(f"Failed to set session: {e}")
+                return user_data
+        except Exception as e:
+            logger.error(f"Error getting user from database: {e}")
     
     return None
 
