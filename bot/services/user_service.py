@@ -47,7 +47,11 @@ class UserService:
                     return None
                 # If we got a DuplicatePreparedStatementError, let's create a new session
                 await db.close()
-                db = AsyncSession(bind=db.get_bind())
+                # Create new session using the database manager
+                from bot.database.db import db_manager
+                async for new_db in db_manager.get_session():
+                    db = new_db
+                    break
     
     @staticmethod
     async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
@@ -126,7 +130,11 @@ class UserService:
                 # If we got a DuplicatePreparedStatementError before, let's create a new session
                 if attempt > 0:
                     await db.close()
-                    db = AsyncSession(bind=db.get_bind())
+                    # Create new session using the database manager
+                    from bot.database.db import db_manager
+                    async for new_db in db_manager.get_session():
+                        db = new_db
+                        break
                 
                 # Check if user is admin - ensure admin_ids is properly parsed
                 try:
@@ -200,7 +208,11 @@ class UserService:
                     return None
                 # If we got an error, let's create a new session for the next attempt
                 await db.close()
-                db = AsyncSession(bind=db.get_bind())
+                # Create new session using the database manager
+                from bot.database.db import db_manager
+                async for new_db in db_manager.get_session():
+                    db = new_db
+                    break
         
         # If we reach here, all attempts failed
         return None

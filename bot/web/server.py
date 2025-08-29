@@ -226,8 +226,8 @@ async def index(
             "login.html",
             {
                 "request": request,
-                "bot_username": settings.bot_username if hasattr(settings, 'bot_username') else "your_bot",
-                "login_url": f"https://t.me/{settings.bot_username if hasattr(settings, 'bot_username') else 'your_bot'}"
+                "bot_username": "nimadirishqiladiganbot",
+                "login_url": "https://t.me/nimadirishqiladiganbot"
             }
         )
     
