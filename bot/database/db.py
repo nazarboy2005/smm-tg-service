@@ -121,10 +121,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_db_session() -> AsyncSession:
+def get_db_session():
     """Get a single database session for handlers"""
     if not db_manager._initialized:
-        await db_manager.initialize()
+        # This should be called before using this function
+        raise RuntimeError("Database not initialized. Call init_db() first.")
     
     return db_manager.async_session_maker()
 

@@ -71,11 +71,9 @@ class PaymentStates(StatesGroup):
 async def cmd_start(message: Message, state: FSMContext, user_language: Language = None):
     """Handle /start command"""
     try:
-        # Get database session
+        # Get database session using proper async context manager
         from bot.database.db import get_db_session
-        db = await get_db_session()
-        
-        try:
+        async with get_db_session() as db:
             # Parse referral code from start parameter
             referral_code = None
             if message.text and len(message.text.split()) > 1:
@@ -141,9 +139,6 @@ async def cmd_start(message: Message, state: FSMContext, user_language: Language
             # Update user activity
             await UserService.update_user_activity(db, user.id)
             
-        finally:
-            await db.close()
-            
     except Exception as e:
         logger.error(f"Error in start command: {e}")
         await message.answer("❌ An error occurred. Please try again.", parse_mode=None)
@@ -158,11 +153,9 @@ async def handle_language_selection(callback: CallbackQuery):
         language = Language(language_code)
         user_language = UserLanguage(language_code)
         
-        # Get database session
+        # Get database session using proper async context manager
         from bot.database.db import get_db_session
-        db = await get_db_session()
-        
-        try:
+        async with get_db_session() as db:
             user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
             if user:
                 await UserService.update_user_language(db, user.id, user_language)
@@ -171,8 +164,6 @@ async def handle_language_selection(callback: CallbackQuery):
                     get_text("language_selected", language),
                     reply_markup=get_main_menu_keyboard(language, user.is_admin)
                 )
-        finally:
-            await db.close()
             
     except Exception as e:
         logger.error(f"Error in language selection: {e}")
@@ -183,11 +174,9 @@ async def handle_language_selection(callback: CallbackQuery):
 async def handle_main_menu(callback: CallbackQuery, user_language: Language = None):
     """Handle main menu"""
     try:
-        # Get database session
+        # Get database session using proper async context manager
         from bot.database.db import get_db_session
-        db = await get_db_session()
-        
-        try:
+        async with get_db_session() as db:
             user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
             if user:
                 # Use middleware language or user language from DB
@@ -196,8 +185,6 @@ async def handle_main_menu(callback: CallbackQuery, user_language: Language = No
                     get_text("main_menu", language),
                     reply_markup=get_main_menu_keyboard(language, user.is_admin)
                 )
-        finally:
-            await db.close()
     except Exception as e:
         logger.error(f"Error in main menu: {e}")
         await callback.answer("❌ Error")

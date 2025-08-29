@@ -85,17 +85,14 @@ async def webhook(request: Request):
             from aiogram.types import Update
             update = Update(**update_data)
             
-            # Use asyncio.create_task to properly handle the async operation
-            # This prevents the "Timeout context manager should be used inside a task" error
-            task = asyncio.create_task(dp.feed_update(bot, update))
-            
-            # Wait for the task to complete with a reasonable timeout
+            # Process update without timeout to avoid context manager issues
+            # The dispatcher will handle its own timeout internally
             try:
-                await asyncio.wait_for(task, timeout=30.0)  # 30 second timeout
+                await dp.feed_update(bot, update)
                 logger.debug("Update processed successfully")
-            except asyncio.TimeoutError:
-                logger.warning("Update processing timed out after 30 seconds")
-                # Don't raise an exception, just log the timeout
+            except Exception as update_error:
+                logger.error(f"Error processing update: {update_error}")
+                # Don't raise an exception, just log the error
                 # Telegram will retry if needed
         else:
             logger.error("Bot or dispatcher not initialized for webhook")
@@ -219,7 +216,7 @@ async def index(
                     <h1>🚀 Elite JAP Bot</h1>
                     <p>Welcome to the premium SMM services platform</p>
                     <p>Please start the bot to access your dashboard:</p>
-                    <a href="https://t.me/{settings.bot_username}" class="btn">Start Bot</a>
+                    <a href="https://t.me/nimadirishqiladiganbot" class="btn">Start Bot</a>
                     <p><small>After starting the bot, you'll be able to access this dashboard</small></p>
                 </div>
             </body>
@@ -252,17 +249,17 @@ async def index(
     # Get popular services
     popular_services = await ServiceService.get_popular_services(db, limit=4)
     
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "user": user,
-            "balance": balance,
-            "orders": orders,
-            "popular_services": popular_services,
-            "bot_username": settings.bot_username
-        }
-    )
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "user": user,
+                "balance": balance,
+                "orders": orders,
+                "popular_services": popular_services,
+                "bot_username": "nimadirishqiladiganbot"
+            }
+        )
 
 
 @app.get("/services", response_class=HTMLResponse)
@@ -272,7 +269,7 @@ async def services(
 ):
     """Services page"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get categories
     async for db in get_db():
@@ -285,7 +282,7 @@ async def services(
             "request": request,
             "user": user,
             "categories": categories,
-            "bot_username": settings.bot_username
+            "bot_username": "nimadirishqiladiganbot"
         }
     )
 
@@ -297,7 +294,7 @@ async def orders(
 ):
     """Orders page"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get user orders
     async for db in get_db():
@@ -311,7 +308,7 @@ async def orders(
             "request": request,
             "user": user,
             "orders": orders,
-            "bot_username": settings.bot_username
+            "bot_username": "nimadirishqiladiganbot"
         }
     )
 
@@ -323,7 +320,7 @@ async def balance(
 ):
     """Balance page"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get user balance
     async for db in get_db():
@@ -342,7 +339,7 @@ async def balance(
             "user": user,
             "balance": balance,
             "payment_methods": payment_methods,
-            "bot_username": settings.bot_username
+            "bot_username": "nimadirishqiladiganbot"
         }
     )
 
@@ -355,7 +352,7 @@ async def payment_page(
 ):
     """Payment page for a specific transaction"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get transaction details
     async for db in get_db():
@@ -377,19 +374,19 @@ async def payment_page(
         coins_amount = transaction.amount
         break
     
-    return templates.TemplateResponse(
-        "payment.html",
-        {
-            "request": request,
-            "user": user,
-            "balance": balance,
-            "transaction_id": transaction_id,
-            "amount_usd": transaction.usd_amount,
-            "coins_amount": coins_amount,
-            "payment_methods": payment_methods,
-            "bot_username": settings.bot_username
-        }
-    )
+        return templates.TemplateResponse(
+            "payment.html",
+            {
+                "request": request,
+                "user": user,
+                "balance": balance,
+                "transaction_id": transaction_id,
+                "amount_usd": transaction.usd_amount,
+                "coins_amount": coins_amount,
+                "payment_methods": payment_methods,
+                "bot_username": "nimadirishqiladiganbot"
+            }
+        )
 
 
 @app.post("/process_payment")
@@ -399,7 +396,7 @@ async def process_payment(
 ):
     """Process payment"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get form data
     form_data = await request.form()
@@ -453,7 +450,7 @@ async def payment_success(
 ):
     """Payment success page"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get transaction details
     async for db in get_db():
@@ -480,7 +477,7 @@ async def payment_success(
             "balance": balance,
             "transaction_id": transaction_id,
             "coins_amount": transaction.amount,
-            "bot_username": settings.bot_username
+            "bot_username": "nimadirishqiladiganbot"
         }
     )
 
@@ -494,7 +491,7 @@ async def payment_failure(
 ):
     """Payment failure page"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get transaction details
     async for db in get_db():
@@ -517,7 +514,7 @@ async def payment_failure(
             "balance": balance,
             "transaction_id": transaction_id,
             "error_message": error,
-            "bot_username": settings.bot_username
+            "bot_username": "nimadirishqiladiganbot"
         }
     )
 
@@ -530,7 +527,7 @@ async def payment_cancel(
 ):
     """Payment cancelled by user"""
     if not user:
-        return RedirectResponse(url=f"https://t.me/{settings.bot_username}")
+        return RedirectResponse(url="https://t.me/nimadirishqiladiganbot")
     
     # Get transaction details
     async for db in get_db():
