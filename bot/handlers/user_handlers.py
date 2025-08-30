@@ -56,6 +56,191 @@ async def test_command(message: Message):
         logger.error(f"Error handling /test command: {e}")
 
 
+@router.message(Command("services"))
+async def cmd_services(message: Message):
+    """Get services directly from JAP API"""
+    try:
+        logger.info(f"Services request from user {message.from_user.id}")
+        
+        # Send loading message
+        loading_msg = await message.answer("🔄 Fetching services from JAP API...")
+        
+        # Get services directly from JAP API
+        services = await ServiceService.get_services_from_jap()
+        
+        if not services:
+            await loading_msg.edit_text("❌ Failed to fetch services from JAP API. Please try again later.")
+            return
+        
+        # Group services by category
+        categories = {}
+        for service in services:
+            category = service.get("category", "Other")
+            if category not in categories:
+                categories[category] = []
+            categories[category].append(service)
+        
+        # Create response message
+        response = "📋 <b>Available Services from JAP API</b>\n\n"
+        
+        for category_name, category_services in list(categories.items())[:10]:  # Limit to first 10 categories
+            response += f"📁 <b>{category_name}</b>\n"
+            
+            for service in category_services[:5]:  # Limit to first 5 services per category
+                service_id = service.get("service", "N/A")
+                service_name = service.get("name", "Unknown")
+                rate = service.get("rate", "0")
+                min_qty = service.get("min", "0")
+                max_qty = service.get("max", "0")
+                
+                response += f"  • <b>{service_name}</b>\n"
+                response += f"    ID: {service_id} | Rate: ${rate}/1K | Min: {min_qty} | Max: {max_qty}\n\n"
+        
+        if len(categories) > 10:
+            response += f"... and {len(categories) - 10} more categories\n"
+        
+        response += "💡 <i>Use /order [service_id] [link] [quantity] to place an order</i>"
+        
+        await loading_msg.edit_text(response, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Error in services command: {e}")
+        await message.answer("❌ An error occurred while fetching services. Please try again.")
+
+
+@router.message(Command("balance"))
+async def cmd_balance(message: Message):
+    """Get JAP balance directly from API"""
+    try:
+        logger.info(f"Balance request from user {message.from_user.id}")
+        
+        # Send loading message
+        loading_msg = await message.answer("🔄 Fetching JAP balance...")
+        
+        # Get balance directly from JAP API
+        balance_info = await ServiceService.get_jap_balance()
+        
+        if not balance_info:
+            await loading_msg.edit_text("❌ Failed to fetch balance from JAP API. Please try again later.")
+            return
+        
+        balance = balance_info.get("balance", "0")
+        currency = balance_info.get("currency", "USD")
+        
+        response = f"💰 <b>JAP Balance</b>\n\n"
+        response += f"💵 Balance: <b>{balance} {currency}</b>\n\n"
+        response += "💡 <i>This is your current balance on the JAP platform</i>"
+        
+        await loading_msg.edit_text(response, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Error in balance command: {e}")
+        await message.answer("❌ An error occurred while fetching balance. Please try again.")
+
+
+@router.message(Command("order"))
+async def cmd_order(message: Message):
+    """Create order directly via JAP API"""
+    try:
+        # Parse command arguments: /order [service_id] [link] [quantity]
+        args = message.text.split()[1:]
+        
+        if len(args) != 3:
+            await message.answer(
+                "📝 <b>Order Command Usage:</b>\n\n"
+                "Use: <code>/order [service_id] [link] [quantity]</code>\n\n"
+                "Example: <code>/order 123 https://instagram.com/user 1000</code>\n\n"
+                "💡 First use /services to see available service IDs",
+                parse_mode="HTML"
+            )
+            return
+        
+        service_id = int(args[0])
+        link = args[1]
+        quantity = int(args[2])
+        
+        logger.info(f"Order request from user {message.from_user.id}: service={service_id}, link={link}, quantity={quantity}")
+        
+        # Send loading message
+        loading_msg = await message.answer("🔄 Creating order via JAP API...")
+        
+        # Create order directly via JAP API
+        order_result = await ServiceService.create_order_via_jap(service_id, link, quantity)
+        
+        if not order_result:
+            await loading_msg.edit_text("❌ Failed to create order via JAP API. Please check your parameters and try again.")
+            return
+        
+        order_id = order_result.get("order", "Unknown")
+        
+        response = f"✅ <b>Order Created Successfully!</b>\n\n"
+        response += f"🆔 Order ID: <b>{order_id}</b>\n"
+        response += f"🔗 Link: {link}\n"
+        response += f"📊 Quantity: {quantity}\n"
+        response += f"🆔 Service ID: {service_id}\n\n"
+        response += f"💡 Use /status {order_id} to check order status"
+        
+        await loading_msg.edit_text(response, parse_mode="HTML")
+        
+    except ValueError:
+        await message.answer("❌ Invalid parameters. Please use: /order [service_id] [link] [quantity]")
+    except Exception as e:
+        logger.error(f"Error in order command: {e}")
+        await message.answer("❌ An error occurred while creating the order. Please try again.")
+
+
+@router.message(Command("status"))
+async def cmd_status(message: Message):
+    """Get order status directly via JAP API"""
+    try:
+        # Parse command arguments: /status [order_id]
+        args = message.text.split()[1:]
+        
+        if len(args) != 1:
+            await message.answer(
+                "📝 <b>Status Command Usage:</b>\n\n"
+                "Use: <code>/status [order_id]</code>\n\n"
+                "Example: <code>/status 12345</code>",
+                parse_mode="HTML"
+            )
+            return
+        
+        order_id = int(args[0])
+        
+        logger.info(f"Status request from user {message.from_user.id}: order_id={order_id}")
+        
+        # Send loading message
+        loading_msg = await message.answer("🔄 Fetching order status...")
+        
+        # Get order status directly via JAP API
+        status_result = await ServiceService.get_order_status_via_jap(order_id)
+        
+        if not status_result:
+            await loading_msg.edit_text("❌ Failed to fetch order status. Please check the order ID and try again.")
+            return
+        
+        charge = status_result.get("charge", "0")
+        start_count = status_result.get("start_count", "0")
+        status = status_result.get("status", "Unknown")
+        remains = status_result.get("remains", "0")
+        currency = status_result.get("currency", "USD")
+        
+        response = f"📊 <b>Order Status</b>\n\n"
+        response += f"🆔 Order ID: <b>{order_id}</b>\n"
+        response += f"💰 Charge: <b>{charge} {currency}</b>\n"
+        response += f"📈 Start Count: <b>{start_count}</b>\n"
+        response += f"📊 Status: <b>{status}</b>\n"
+        response += f"📉 Remains: <b>{remains}</b>\n"
+        
+        await loading_msg.edit_text(response, parse_mode="HTML")
+        
+    except ValueError:
+        await message.answer("❌ Invalid order ID. Please use: /status [order_id]")
+    except Exception as e:
+        logger.error(f"Error in status command: {e}")
+        await message.answer("❌ An error occurred while fetching order status. Please try again.")
+
+
 class OrderStates(StatesGroup):
     waiting_for_link = State()
     waiting_for_quantity = State()
@@ -81,63 +266,69 @@ async def cmd_start(message: Message, state: FSMContext, user_language: Language
         
         # Get database session using proper async context manager
         async for db in get_db():
-            # Get or create user
-            user = await UserService.create_user(
-                db=db,
-                telegram_id=message.from_user.id,
-                username=message.from_user.username,
-                first_name=message.from_user.first_name,
-                last_name=message.from_user.last_name,
-                referred_by_code=referral_code
-            )
-            
-            if not user:
-                await message.answer("❌ Error creating user account. Please try again.", parse_mode=None)
-                return
-            
-            # If new user, show language selection
-            if not user.language or user.language == UserLanguage.ENGLISH:
-                welcome_text = f"🎉 <b>Welcome to SMM Services Bot!</b>\n\n"
-                welcome_text += f"🌟 <b>Premium Social Media Marketing Services</b>\n\n"
-                welcome_text += f"📊 <b>What we offer:</b>\n"
-                welcome_text += f"• Instagram Followers & Likes\n"
-                welcome_text += f"• YouTube Views & Subscribers\n"
-                welcome_text += f"• TikTok Followers & Views\n"
-                welcome_text += f"• Twitter Followers & Retweets\n"
-                welcome_text += f"• And much more!\n\n"
-                welcome_text += f"💰 <b>Features:</b>\n"
-                welcome_text += f"• Instant delivery\n"
-                welcome_text += f"• 24/7 support\n"
-                welcome_text += f"• Secure payments\n"
-                welcome_text += f"• Money-back guarantee\n\n"
-                welcome_text += f"🌐 <b>Please select your language:</b>"
-                
-                await message.answer(
-                    welcome_text,
-                    reply_markup=get_language_keyboard()
+            try:
+                # Get or create user
+                user = await UserService.create_user(
+                    db=db,
+                    telegram_id=message.from_user.id,
+                    username=message.from_user.username,
+                    first_name=message.from_user.first_name,
+                    last_name=message.from_user.last_name,
+                    referred_by_code=referral_code
                 )
-            else:
-                # Show main menu
-                language = Language(user.language.value)
-                balance = await BalanceService.get_user_balance(db, user.id)
                 
-                welcome_text = f"🎉 <b>Welcome back, {user.first_name or 'User'}!</b>\n\n"
-                welcome_text += f"💰 <b>Your Balance:</b> {balance:,.0f} coins\n\n"
-                welcome_text += f"📊 <b>Quick Actions:</b>\n"
-                welcome_text += f"• Browse services\n"
-                welcome_text += f"• Add balance\n"
-                welcome_text += f"• Check orders\n"
-                welcome_text += f"• View referrals\n\n"
-                welcome_text += f"💡 <i>Select an option below to get started</i>"
+                if not user:
+                    await message.answer("❌ Error creating user account. Please try again.", parse_mode=None)
+                    return
                 
-                await message.answer(
-                    welcome_text,
-                    reply_markup=get_main_menu_keyboard(language, user.is_admin)
-                )
-            
-            # Update user activity
-            await UserService.update_user_activity(db, user.id)
-            return  # Exit after successful processing
+                # If new user, show language selection
+                if not user.language or user.language == UserLanguage.ENGLISH:
+                    welcome_text = f"🎉 <b>Welcome to SMM Services Bot!</b>\n\n"
+                    welcome_text += f"🌟 <b>Premium Social Media Marketing Services</b>\n\n"
+                    welcome_text += f"📊 <b>What we offer:</b>\n"
+                    welcome_text += f"• Instagram Followers & Likes\n"
+                    welcome_text += f"• YouTube Views & Subscribers\n"
+                    welcome_text += f"• TikTok Followers & Views\n"
+                    welcome_text += f"• Twitter Followers & Retweets\n"
+                    welcome_text += f"• And much more!\n\n"
+                    welcome_text += f"💰 <b>Features:</b>\n"
+                    welcome_text += f"• Instant delivery\n"
+                    welcome_text += f"• 24/7 support\n"
+                    welcome_text += f"• Secure payments\n"
+                    welcome_text += f"• Money-back guarantee\n\n"
+                    welcome_text += f"🌐 <b>Please select your language:</b>"
+                    
+                    await message.answer(
+                        welcome_text,
+                        reply_markup=get_language_keyboard()
+                    )
+                else:
+                    # Show main menu
+                    language = Language(user.language.value)
+                    balance = await BalanceService.get_user_balance(db, user.id)
+                    
+                    welcome_text = f"🎉 <b>Welcome back, {user.first_name or 'User'}!</b>\n\n"
+                    welcome_text += f"💰 <b>Your Balance:</b> {balance:,.0f} coins\n\n"
+                    welcome_text += f"📊 <b>Quick Actions:</b>\n"
+                    welcome_text += f"• Browse services\n"
+                    welcome_text += f"• Add balance\n"
+                    welcome_text += f"• Check orders\n"
+                    welcome_text += f"• View referrals\n\n"
+                    welcome_text += f"💡 <i>Select an option below to get started</i>"
+                    
+                    await message.answer(
+                        welcome_text,
+                        reply_markup=get_main_menu_keyboard(language, user.is_admin)
+                    )
+                
+                # Update user activity
+                await UserService.update_user_activity(db, user.id)
+                break  # Exit the async for loop after successful processing
+                
+            except Exception as db_error:
+                logger.error(f"Database error in start command: {db_error}")
+                await message.answer("❌ Database error. Please try again.", parse_mode=None)
+                break
             
     except Exception as e:
         logger.error(f"Error in start command: {e}")
@@ -155,15 +346,20 @@ async def handle_language_selection(callback: CallbackQuery):
         
         # Get database session using proper async context manager
         async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                await UserService.update_user_language(db, user.id, user_language)
-                
-                await callback.message.edit_text(
-                    get_text("language_selected", language),
-                    reply_markup=get_main_menu_keyboard(language, user.is_admin)
-                )
-            return
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    await UserService.update_user_language(db, user.id, user_language)
+                    
+                    await callback.message.edit_text(
+                        get_text("language_selected", language),
+                        reply_markup=get_main_menu_keyboard(language, user.is_admin)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in language selection: {db_error}")
+                await callback.answer("❌ Database error")
+                break
             
     except Exception as e:
         logger.error(f"Error in language selection: {e}")
@@ -176,15 +372,20 @@ async def handle_main_menu(callback: CallbackQuery, user_language: Language = No
     try:
         # Get database session using proper async context manager
         async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                # Use middleware language or user language from DB
-                language = user_language or Language(user.language.value)
-                await callback.message.edit_text(
-                    get_text("main_menu", language),
-                    reply_markup=get_main_menu_keyboard(language, user.is_admin)
-                )
-            return
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    # Use middleware language or user language from DB
+                    language = user_language or Language(user.language.value)
+                    await callback.message.edit_text(
+                        get_text("main_menu", language),
+                        reply_markup=get_main_menu_keyboard(language, user.is_admin)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in main menu: {db_error}")
+                await callback.answer("❌ Database error")
+                break
     except Exception as e:
         logger.error(f"Error in main menu: {e}")
         await callback.answer("❌ Error")
@@ -196,32 +397,37 @@ async def handle_balance_menu(callback: CallbackQuery, user_language: Language =
     try:
         # Get database session
         async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                # Use middleware language or user language from DB
-                language = user_language or Language(user.language.value)
-                balance = await BalanceService.get_user_balance(db, user.id)
-                
-                # Get dynamic settings
-                min_deposit = await SettingsService.get_setting(db, "min_deposit_usd", 1.0)
-                max_deposit = await SettingsService.get_setting(db, "max_deposit_usd", 1000.0)
-                coins_per_usd = await SettingsService.get_setting(db, "coins_per_usd", 1000)
-                
-                # Enhanced balance display
-                text = f"💰 <b>Your Balance</b>\n\n"
-                text += f"🪙 <b>Coins:</b> {balance:,.0f}\n"
-                text += f"💵 <b>USD Value:</b> ${balance/coins_per_usd:.2f}\n\n"
-                text += f"📊 <b>Deposit Limits:</b>\n"
-                text += f"• Minimum: ${min_deposit} USD\n"
-                text += f"• Maximum: ${max_deposit} USD\n"
-                text += f"• Rate: {coins_per_usd:,} coins per $1 USD\n\n"
-                text += f"💡 <i>Tap 'Add Balance' to deposit funds</i>"
-                
-                await callback.message.edit_text(
-                    text,
-                    reply_markup=get_balance_menu_keyboard(language)
-                )
-            return
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    # Use middleware language or user language from DB
+                    language = user_language or Language(user.language.value)
+                    balance = await BalanceService.get_user_balance(db, user.id)
+                    
+                    # Get dynamic settings
+                    min_deposit = await SettingsService.get_setting(db, "min_deposit_usd", 1.0)
+                    max_deposit = await SettingsService.get_setting(db, "max_deposit_usd", 1000.0)
+                    coins_per_usd = await SettingsService.get_setting(db, "coins_per_usd", 1000)
+                    
+                    # Enhanced balance display
+                    text = f"💰 <b>Your Balance</b>\n\n"
+                    text += f"🪙 <b>Coins:</b> {balance:,.0f}\n"
+                    text += f"💵 <b>USD Value:</b> ${balance/coins_per_usd:.2f}\n\n"
+                    text += f"📊 <b>Deposit Limits:</b>\n"
+                    text += f"• Minimum: ${min_deposit} USD\n"
+                    text += f"• Maximum: ${max_deposit} USD\n"
+                    text += f"• Rate: {coins_per_usd:,} coins per $1 USD\n\n"
+                    text += f"💡 <i>Tap 'Add Balance' to deposit funds</i>"
+                    
+                    await callback.message.edit_text(
+                        text,
+                        reply_markup=get_balance_menu_keyboard(language)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in balance menu: {db_error}")
+                await callback.answer("❌ Database error")
+                break
     except Exception as e:
         logger.error(f"Error in balance menu: {e}")
         await callback.answer("❌ Error loading balance")
@@ -232,15 +438,20 @@ async def handle_add_balance(callback: CallbackQuery):
     """Handle add balance"""
     try:
         async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                
-                await callback.message.edit_text(
-                    get_text("choose_payment_method", language),
-                    reply_markup=await get_payment_methods_keyboard(db, language)
-                )
-            return
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    await callback.message.edit_text(
+                        get_text("choose_payment_method", language),
+                        reply_markup=await get_payment_methods_keyboard(db, language)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in add balance: {db_error}")
+                await callback.answer("❌ Database error")
+                break
     except Exception as e:
         logger.error(f"Error in add balance: {e}")
         await callback.answer("❌ Error")
@@ -253,25 +464,30 @@ async def handle_payment_method(callback: CallbackQuery, state: FSMContext):
         payment_method = callback.data.split("_")[1]
         
         async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                
-                # Store payment method in state
-                await state.update_data(payment_method=payment_method)
-                await state.set_state(PaymentStates.waiting_for_amount)
-                
-                # Get dynamic settings
-                min_deposit = await SettingsService.get_setting(db, "min_deposit_usd", 1.0)
-                max_deposit = await SettingsService.get_setting(db, "max_deposit_usd", 1000.0)
-                
-                await callback.message.edit_text(
-                    get_text("enter_amount", language, 
-                           min_usd=min_deposit, 
-                           max_usd=max_deposit),
-                    reply_markup=get_back_keyboard(language, "balance_add")
-                )
-            break
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    # Store payment method in state
+                    await state.update_data(payment_method=payment_method)
+                    await state.set_state(PaymentStates.waiting_for_amount)
+                    
+                    # Get dynamic settings
+                    min_deposit = await SettingsService.get_setting(db, "min_deposit_usd", 1.0)
+                    max_deposit = await SettingsService.get_setting(db, "max_deposit_usd", 1000.0)
+                    
+                    await callback.message.edit_text(
+                        get_text("enter_amount", language, 
+                               min_usd=min_deposit, 
+                               max_usd=max_deposit),
+                        reply_markup=get_back_keyboard(language, "balance_add")
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in payment method: {db_error}")
+                await callback.answer("❌ Database error")
+                break
     except Exception as e:
         logger.error(f"Error in payment method: {e}")
         await callback.answer("❌ Error")
@@ -300,67 +516,73 @@ async def handle_payment_amount(message: Message, state: FSMContext):
             return
         
         async for db in get_db():
-            # Check amount limits with dynamic settings
-            min_deposit = await SettingsService.get_setting(db, "min_deposit_usd", 1.0)
-            max_deposit = await SettingsService.get_setting(db, "max_deposit_usd", 1000.0)
-            
-            if amount < min_deposit or amount > max_deposit:
+            try:
+                # Check amount limits with dynamic settings
+                min_deposit = await SettingsService.get_setting(db, "min_deposit_usd", 1.0)
+                max_deposit = await SettingsService.get_setting(db, "max_deposit_usd", 1000.0)
+                
+                if amount < min_deposit or amount > max_deposit:
+                    user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
+                    if user:
+                        language = Language(user.language.value)
+                        await message.answer(
+                            get_text("invalid_amount", language, 
+                                   min_usd=min_deposit, 
+                                   max_usd=max_deposit)
+                        )
+                    break
+                
+                # Get payment method from state
+                data = await state.get_data()
+                payment_method = data.get("payment_method")
+                
+                if not payment_method:
+                    await message.answer("❌ Payment method not found. Please start again.", parse_mode=None)
+                    await state.clear()
+                    return
+                
                 user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
                 if user:
                     language = Language(user.language.value)
-                    await message.answer(
-                        get_text("invalid_amount", language, 
-                               min_usd=min_deposit, 
-                               max_usd=max_deposit)
-                    )
-                break
-            
-            # Get payment method from state
-            data = await state.get_data()
-            payment_method = data.get("payment_method")
-            
-            if not payment_method:
-                await message.answer("❌ Payment method not found. Please start again.", parse_mode=None)
-                await state.clear()
-                return
-            
-            user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                
-                # Create payment
-                result = await payment_service.create_payment(
-                    db=db,
-                    provider_name=payment_method,
-                    user_id=user.id,
-                    amount_usd=amount,
-                    description=f"Balance top-up via {payment_method}"
-                )
-                
-                if result and result.success:
-                    coins_amount = await BalanceService.usd_to_coins(db, amount)
                     
-                    if result.payment_url:
-                        # Send payment link
-                        await message.answer(
-                            f"💳 <b>Payment created!</b>\n"
-                            f"💰 Amount: ${amount} USD ({coins_amount} coins)\n"
-                            f"🔗 Payment link: {result.payment_url}\n\n"
-                            f"⏳ Complete the payment and your balance will be updated automatically."
-                        )
+                    # Create payment
+                    result = await payment_service.create_payment(
+                        db=db,
+                        provider_name=payment_method,
+                        user_id=user.id,
+                        amount_usd=amount,
+                        description=f"Balance top-up via {payment_method}"
+                    )
+                    
+                    if result and result.success:
+                        coins_amount = await BalanceService.usd_to_coins(db, amount)
+                        
+                        if result.payment_url:
+                            # Send payment link
+                            await message.answer(
+                                f"💳 <b>Payment created!</b>\n"
+                                f"💰 Amount: ${amount} USD ({coins_amount} coins)\n"
+                                f"🔗 Payment link: {result.payment_url}\n\n"
+                                f"⏳ Complete the payment and your balance will be updated automatically."
+                            )
+                        else:
+                            await message.answer(
+                                f"💳 <b>Payment created!</b>\n"
+                                f"💰 Amount: ${amount} USD ({coins_amount} coins)\n"
+                                f"Payment ID: {result.payment_id}\n\n"
+                                f"⏳ Please complete the payment."
+                            )
                     else:
-                        await message.answer(
-                            f"💳 <b>Payment created!</b>\n"
-                            f"💰 Amount: ${amount} USD ({coins_amount} coins)\n"
-                            f"Payment ID: {result.payment_id}\n\n"
-                            f"⏳ Please complete the payment."
-                        )
-                else:
-                    error_msg = result.error_message if result else "Payment creation failed"
-                    await message.answer(f"❌ {error_msg}", parse_mode=None)
-                
+                        error_msg = result.error_message if result else "Payment creation failed"
+                        await message.answer(f"❌ {error_msg}", parse_mode=None)
+                    
+                    await state.clear()
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in payment amount: {db_error}")
+                await message.answer("❌ Database error processing payment", parse_mode=None)
                 await state.clear()
-            break
+                break
             
     except Exception as e:
         logger.error(f"Error in payment amount: {e}")
@@ -376,21 +598,10 @@ async def handle_services_menu(callback: CallbackQuery):
     """Handle services menu"""
     try:
         async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                categories = await ServiceService.get_active_categories(db)
-                
-                if categories:
-                    await callback.message.edit_text(
-                        get_text("choose_category", language),
-                        reply_markup=get_service_categories_keyboard(categories, language)
-                    )
-                else:
-                    # Create demo categories and services when none are available
-                    await ServiceService.create_demo_categories_and_services(db)
-                    
-                    # Try to fetch again
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
                     categories = await ServiceService.get_active_categories(db)
                     
                     if categories:
@@ -399,11 +610,27 @@ async def handle_services_menu(callback: CallbackQuery):
                             reply_markup=get_service_categories_keyboard(categories, language)
                         )
                     else:
-                        await callback.message.edit_text(
-                            get_text("no_services", language),
-                            reply_markup=get_back_keyboard(language)
-                        )
-            break
+                        # Create demo categories and services when none are available
+                        await ServiceService.create_demo_categories_and_services(db)
+                        
+                        # Try to fetch again
+                        categories = await ServiceService.get_active_categories(db)
+                        
+                        if categories:
+                            await callback.message.edit_text(
+                                get_text("choose_category", language),
+                                reply_markup=get_service_categories_keyboard(categories, language)
+                            )
+                        else:
+                            await callback.message.edit_text(
+                                get_text("no_services", language),
+                                reply_markup=get_back_keyboard(language)
+                            )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in services menu: {db_error}")
+                await callback.answer("❌ Database error")
+                break
     except Exception as e:
         logger.error(f"Error in services menu: {e}")
         await callback.answer("❌ Error")
@@ -415,25 +642,29 @@ async def handle_sticker(message: Message):
     """Handle sticker messages with appropriate responses"""
     try:
         async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                
-                # Respond with a fun message and show main menu
-                sticker_responses = [
-                    get_text("sticker_response_1", language),
-                    get_text("sticker_response_2", language),
-                    get_text("sticker_response_3", language)
-                ]
-                
-                import random
-                response = random.choice(sticker_responses)
-                
-                await message.answer(
-                    response,
-                    reply_markup=get_main_menu_keyboard(language, user.is_admin)
-                )
-            break
+            try:
+                user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    # Respond with a fun message and show main menu
+                    sticker_responses = [
+                        get_text("sticker_response_1", language),
+                        get_text("sticker_response_2", language),
+                        get_text("sticker_response_3", language)
+                    ]
+                    
+                    import random
+                    response = random.choice(sticker_responses)
+                    
+                    await message.answer(
+                        response,
+                        reply_markup=get_main_menu_keyboard(language, user.is_admin)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error handling sticker: {db_error}")
+                break
     except Exception as e:
         logger.error(f"Error handling sticker: {e}")
 

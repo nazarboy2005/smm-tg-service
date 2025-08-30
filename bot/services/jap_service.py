@@ -13,7 +13,7 @@ class JAPService:
     """Service for JAP API integration"""
     
     def __init__(self):
-        self.api_url = settings.jap_api_url
+        self.api_url = "https://justanotherpanel.com/api/v2"
         self.api_key = settings.jap_api_key
         self.session = None
     
@@ -32,20 +32,16 @@ class JAPService:
     
     async def _make_request(
         self,
-        endpoint: str,
-        method: str = "POST",
-        data: Optional[Dict[str, Any]] = None
+        data: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """Make HTTP request to JAP API"""
         try:
             session = await self._get_session()
-            url = f"{self.api_url}/{endpoint}"
             
-            # Prepare request data
-            request_data = data or {}
-            request_data["key"] = self.api_key
+            # Add API key to data
+            data["key"] = self.api_key
             
-            async with session.request(method, url, data=request_data) as response:
+            async with session.post(self.api_url, data=data) as response:
                 if response.status == 200:
                     result = await response.json()
                     return result
@@ -53,20 +49,15 @@ class JAPService:
                     logger.error(f"JAP API request failed: {response.status} - {await response.text()}")
                     return None
                     
-        except Exception as timeout_error:
-            if "timeout" in str(timeout_error).lower():
-                logger.error(f"JAP API request timeout for endpoint: {endpoint}")
-                return None
-            else:
-                raise timeout_error
         except Exception as e:
-            logger.error(f"JAP API request error for endpoint {endpoint}: {e}")
+            logger.error(f"JAP API request error: {e}")
             return None
     
     async def get_services(self) -> Optional[List[Dict[str, Any]]]:
         """Get available services from JAP API"""
         try:
-            result = await self._make_request("services")
+            data = {"action": "services"}
+            result = await self._make_request(data)
             if result and isinstance(result, list):
                 logger.info(f"Retrieved {len(result)} services from JAP API")
                 return result
@@ -92,7 +83,9 @@ class JAPService:
         self,
         service_id: int,
         link: str,
-        quantity: int
+        quantity: int,
+        runs: Optional[int] = None,
+        interval: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         """Create order via JAP API"""
         try:
@@ -103,8 +96,14 @@ class JAPService:
                 "quantity": quantity
             }
             
-            result = await self._make_request("", data=data)
-            if result:
+            # Add optional parameters
+            if runs is not None:
+                data["runs"] = runs
+            if interval is not None:
+                data["interval"] = interval
+            
+            result = await self._make_request(data)
+            if result and "order" in result:
                 logger.info(f"Created JAP order: service {service_id}, quantity {quantity}, order_id {result.get('order')}")
                 return result
             return None
@@ -121,7 +120,7 @@ class JAPService:
                 "order": order_id
             }
             
-            result = await self._make_request("", data=data)
+            result = await self._make_request(data)
             if result:
                 return result
             return None
@@ -138,7 +137,7 @@ class JAPService:
                 "orders": ",".join(map(str, order_ids))
             }
             
-            result = await self._make_request("", data=data)
+            result = await self._make_request(data)
             if result:
                 return result
             return None
@@ -147,11 +146,99 @@ class JAPService:
             logger.error(f"Error getting multiple JAP orders status: {e}")
             return None
     
+    async def create_refill(self, order_id: int) -> Optional[Dict[str, Any]]:
+        """Create refill for an order"""
+        try:
+            data = {
+                "action": "refill",
+                "order": order_id
+            }
+            
+            result = await self._make_request(data)
+            if result and "refill" in result:
+                logger.info(f"Created refill for order {order_id}: refill_id {result.get('refill')}")
+                return result
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error creating refill for order {order_id}: {e}")
+            return None
+    
+    async def create_multiple_refills(self, order_ids: List[int]) -> Optional[List[Dict[str, Any]]]:
+        """Create refills for multiple orders"""
+        try:
+            data = {
+                "action": "refill",
+                "orders": ",".join(map(str, order_ids))
+            }
+            
+            result = await self._make_request(data)
+            if result and isinstance(result, list):
+                logger.info(f"Created refills for {len(result)} orders")
+                return result
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error creating multiple refills: {e}")
+            return None
+    
+    async def get_refill_status(self, refill_id: int) -> Optional[Dict[str, Any]]:
+        """Get refill status"""
+        try:
+            data = {
+                "action": "refill_status",
+                "refill": refill_id
+            }
+            
+            result = await self._make_request(data)
+            if result:
+                return result
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting refill status {refill_id}: {e}")
+            return None
+    
+    async def get_multiple_refills_status(self, refill_ids: List[int]) -> Optional[List[Dict[str, Any]]]:
+        """Get status of multiple refills"""
+        try:
+            data = {
+                "action": "refill_status",
+                "refills": ",".join(map(str, refill_ids))
+            }
+            
+            result = await self._make_request(data)
+            if result and isinstance(result, list):
+                return result
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting multiple refills status: {e}")
+            return None
+    
+    async def cancel_orders(self, order_ids: List[int]) -> Optional[List[Dict[str, Any]]]:
+        """Cancel multiple orders"""
+        try:
+            data = {
+                "action": "cancel",
+                "orders": ",".join(map(str, order_ids))
+            }
+            
+            result = await self._make_request(data)
+            if result and isinstance(result, list):
+                logger.info(f"Cancelled {len(result)} orders")
+                return result
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error cancelling orders: {e}")
+            return None
+    
     async def get_balance(self) -> Optional[float]:
         """Get JAP API balance"""
         try:
             data = {"action": "balance"}
-            result = await self._make_request("", data=data)
+            result = await self._make_request(data)
             
             if result and "balance" in result:
                 balance = float(result["balance"])

@@ -1,13 +1,14 @@
 """
-Service management for SMM services
+Service management for SMM services - Updated for JAP API compatibility
 """
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, and_
 from sqlalchemy.orm import selectinload
 from loguru import logger
+from datetime import datetime
 
-from bot.database.models import ServiceCategory, Service
+from bot.database.models import ServiceCategory, Service, JAPBalance
 from bot.services.jap_service import jap_service
 from bot.config import settings
 
@@ -16,8 +17,104 @@ class ServiceService:
     """Service for managing SMM services"""
     
     @staticmethod
+    async def get_services_from_jap() -> List[Dict[str, Any]]:
+        """Get services directly from JAP API without syncing to database"""
+        try:
+            logger.info("Fetching services from JAP API...")
+            services = await jap_service.get_services()
+            
+            if not services:
+                logger.warning("No services received from JAP API")
+                return []
+            
+            logger.info(f"Successfully fetched {len(services)} services from JAP API")
+            return services
+            
+        except Exception as e:
+            logger.error(f"Error fetching services from JAP API: {e}")
+            return []
+    
+    @staticmethod
+    async def get_service_from_jap(service_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific service from JAP API"""
+        try:
+            services = await ServiceService.get_services_from_jap()
+            
+            for service in services:
+                if int(service.get("service", 0)) == service_id:
+                    return service
+            
+            logger.warning(f"Service {service_id} not found in JAP API")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error fetching service {service_id} from JAP API: {e}")
+            return None
+    
+    @staticmethod
+    async def create_order_via_jap(service_id: int, link: str, quantity: int) -> Optional[Dict[str, Any]]:
+        """Create order directly via JAP API"""
+        try:
+            logger.info(f"Creating order via JAP API: service={service_id}, link={link}, quantity={quantity}")
+            
+            order_result = await jap_service.create_order(
+                service_id=service_id,
+                link=link,
+                quantity=quantity
+            )
+            
+            if order_result and "order" in order_result:
+                logger.info(f"Order created successfully via JAP API: {order_result['order']}")
+                return order_result
+            else:
+                logger.error(f"Failed to create order via JAP API: {order_result}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error creating order via JAP API: {e}")
+            return None
+    
+    @staticmethod
+    async def get_order_status_via_jap(order_id: int) -> Optional[Dict[str, Any]]:
+        """Get order status directly via JAP API"""
+        try:
+            logger.info(f"Getting order status via JAP API: order_id={order_id}")
+            
+            status_result = await jap_service.get_order_status(order_id)
+            
+            if status_result:
+                logger.info(f"Order status retrieved via JAP API: {status_result}")
+                return status_result
+            else:
+                logger.error(f"Failed to get order status via JAP API for order {order_id}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting order status via JAP API: {e}")
+            return None
+    
+    @staticmethod
+    async def get_jap_balance() -> Optional[Dict[str, Any]]:
+        """Get JAP balance directly from API"""
+        try:
+            logger.info("Getting JAP balance...")
+            
+            balance_result = await jap_service.get_balance()
+            
+            if balance_result and "balance" in balance_result:
+                logger.info(f"JAP balance: {balance_result['balance']} {balance_result.get('currency', 'USD')}")
+                return balance_result
+            else:
+                logger.error(f"Failed to get JAP balance: {balance_result}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting JAP balance: {e}")
+            return None
+
+    @staticmethod
     async def sync_services_from_jap(db: AsyncSession) -> bool:
-        """Synchronize services from JAP API"""
+        """Synchronize services from JAP API with improved error handling"""
         try:
             # Get services from JAP API
             jap_services = await jap_service.get_services()
@@ -30,7 +127,7 @@ class ServiceService:
             # Group services by category
             categories_map = {}
             for jap_service_data in jap_services:
-                category_name = jap_service.get_service_category(jap_service_data.get("name", ""))
+                category_name = jap_service_data.get("category", "Other")
                 if category_name not in categories_map:
                     categories_map[category_name] = []
                 categories_map[category_name].append(jap_service_data)
@@ -85,7 +182,7 @@ class ServiceService:
     
     @staticmethod
     async def _sync_service(db: AsyncSession, category_id: int, jap_service_data: Dict[str, Any]) -> bool:
-        """Sync individual service from JAP API"""
+        """Sync individual service from JAP API with improved data handling"""
         try:
             jap_service_id = int(jap_service_data.get("service", 0))
             if not jap_service_id:
@@ -101,14 +198,27 @@ class ServiceService:
             rate_usd = float(jap_service_data.get("rate", 0))
             price_coins = rate_usd * settings.coins_per_usd if rate_usd > 0 else 0
             
+            # Prepare metadata
+            meta_data = {
+                "jap_data": jap_service_data,
+                "last_sync": str(datetime.now())
+            }
+            
             if service:
                 # Update existing service
                 service.name = jap_service_data.get("name", "")
                 service.description = jap_service_data.get("description", "")
+                service.service_type = jap_service_data.get("type", "")
                 service.price_per_1000 = price_coins
+                service.jap_rate_usd = rate_usd
                 service.min_quantity = int(jap_service_data.get("min", 100))
                 service.max_quantity = int(jap_service_data.get("max", 100000))
                 service.category_id = category_id
+                service.supports_refill = bool(jap_service_data.get("refill", False))
+                service.supports_cancel = bool(jap_service_data.get("cancel", False))
+                service.supports_dripfeed = bool(jap_service_data.get("dripfeed", False))
+                service.meta_data = meta_data
+                service.is_active = True
             else:
                 # Create new service
                 service = Service(
@@ -116,9 +226,15 @@ class ServiceService:
                     jap_service_id=jap_service_id,
                     name=jap_service_data.get("name", ""),
                     description=jap_service_data.get("description", ""),
+                    service_type=jap_service_data.get("type", ""),
                     price_per_1000=price_coins,
+                    jap_rate_usd=rate_usd,
                     min_quantity=int(jap_service_data.get("min", 100)),
                     max_quantity=int(jap_service_data.get("max", 100000)),
+                    supports_refill=bool(jap_service_data.get("refill", False)),
+                    supports_cancel=bool(jap_service_data.get("cancel", False)),
+                    supports_dripfeed=bool(jap_service_data.get("dripfeed", False)),
+                    meta_data=meta_data,
                     is_active=True,
                     sort_order=0
                 )
@@ -130,6 +246,42 @@ class ServiceService:
             logger.error(f"Error syncing service {jap_service_data}: {e}")
             return False
     
+    @staticmethod
+    async def update_jap_balance(db: AsyncSession) -> bool:
+        """Update JAP balance in database"""
+        try:
+            balance_info = await ServiceService.get_jap_balance()
+            if not balance_info:
+                return False
+            
+            balance = float(balance_info.get("balance", 0))
+            currency = balance_info.get("currency", "USD")
+            
+            # Check if balance record exists
+            result = await db.execute(select(JAPBalance))
+            jap_balance = result.scalar_one_or_none()
+            
+            if jap_balance:
+                # Update existing balance
+                jap_balance.balance = balance
+                jap_balance.currency = currency
+            else:
+                # Create new balance record
+                jap_balance = JAPBalance(
+                    balance=balance,
+                    currency=currency
+                )
+                db.add(jap_balance)
+            
+            await db.commit()
+            logger.info(f"JAP balance updated: {balance} {currency}")
+            return True
+            
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Error updating JAP balance: {e}")
+            return False
+
     @staticmethod
     async def get_active_categories(db: AsyncSession) -> List[ServiceCategory]:
         """Get all active service categories"""
@@ -178,6 +330,20 @@ class ServiceService:
             return None
     
     @staticmethod
+    async def get_service_by_jap_id(db: AsyncSession, jap_service_id: int) -> Optional[Service]:
+        """Get service by JAP service ID"""
+        try:
+            result = await db.execute(
+                select(Service)
+                .options(selectinload(Service.category))
+                .where(Service.jap_service_id == jap_service_id)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting service by JAP ID {jap_service_id}: {e}")
+            return None
+    
+    @staticmethod
     async def calculate_order_cost(db: AsyncSession, service_id: int, quantity: int) -> float:
         """Calculate order cost in coins"""
         try:
@@ -204,7 +370,7 @@ class ServiceService:
             return service.min_quantity <= quantity <= service.max_quantity
             
         except Exception as e:
-            logger.error(f"Error validating quantity for service {service_id}: {e}")
+            logger.error(f"Error validating order quantity for service {service_id}: {e}")
             return False
     
     @staticmethod

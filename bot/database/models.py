@@ -1,11 +1,11 @@
 """
-Database models for the SMM Bot
+Database models for the SMM Bot - Updated for JAP API compatibility
 """
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Text, 
-    ForeignKey, BigInteger, Enum as SQLEnum, Index
+    ForeignKey, BigInteger, Enum as SQLEnum, Index, JSON
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -44,6 +44,7 @@ class OrderStatus(enum.Enum):
     PARTIAL = "partial"
     CANCELLED = "cancelled"
     ERROR = "error"
+    REFILL = "refill"  # For refill orders
 
 
 class PaymentMethod(enum.Enum):
@@ -110,7 +111,7 @@ class Transaction(Base):
     payment_method = Column(SQLEnum(PaymentMethod), nullable=True)
     external_id = Column(String(255), nullable=True, index=True)  # Payment provider transaction ID
     description = Column(Text, nullable=True)
-    meta_data = Column(Text, nullable=True)  # JSON string for additional data
+    meta_data = Column(JSON, nullable=True)  # JSON for additional data
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -131,15 +132,21 @@ class ServiceCategory(Base):
     __tablename__ = "service_categories"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)
+    jap_category_id = Column(Integer, nullable=True, index=True)  # JAP API category ID if available
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationships
     services = relationship("Service", back_populates="category")
+    
+    # Indexes
+    __table_args__ = (
+        Index('ix_service_categories_name', 'name'),
+    )
     
     def __repr__(self):
         return f"<ServiceCategory(name={self.name})>"
@@ -150,14 +157,25 @@ class Service(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     category_id = Column(Integer, ForeignKey("service_categories.id"), nullable=False)
-    jap_service_id = Column(Integer, nullable=False, index=True)  # JAP API service ID
-    name = Column(String(255), nullable=False)
+    jap_service_id = Column(Integer, nullable=False, unique=True, index=True)  # JAP API service ID
+    name = Column(String(500), nullable=False, index=True)
     description = Column(Text, nullable=True)
+    service_type = Column(String(100), nullable=True)  # JAP service type (Default, Custom Comments, etc.)
     price_per_1000 = Column(Float, nullable=False)  # Price in coins per 1000 units
+    jap_rate_usd = Column(Float, nullable=True)  # Original JAP rate in USD
     min_quantity = Column(Integer, default=100, nullable=False)
     max_quantity = Column(Integer, default=100000, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)
+    
+    # JAP API specific fields
+    supports_refill = Column(Boolean, default=False, nullable=False)
+    supports_cancel = Column(Boolean, default=False, nullable=False)
+    supports_dripfeed = Column(Boolean, default=False, nullable=False)
+    
+    # Additional metadata
+    meta_data = Column(JSON, nullable=True)  # Store additional JAP API data
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -165,8 +183,15 @@ class Service(Base):
     category = relationship("ServiceCategory", back_populates="services")
     orders = relationship("Order", back_populates="service")
     
+    # Indexes
+    __table_args__ = (
+        Index('ix_services_jap_service_id', 'jap_service_id'),
+        Index('ix_services_category_active', 'category_id', 'is_active'),
+        Index('ix_services_name', 'name'),
+    )
+    
     def __repr__(self):
-        return f"<Service(name={self.name}, price_per_1000={self.price_per_1000})>"
+        return f"<Service(name={self.name}, jap_service_id={self.jap_service_id}, price_per_1000={self.price_per_1000})>"
 
 
 class Order(Base):
@@ -175,13 +200,29 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     service_id = Column(Integer, ForeignKey("services.id"), nullable=False)
-    jap_order_id = Column(Integer, nullable=True, index=True)  # JAP API order ID
-    link = Column(String(500), nullable=False)  # Social media link
+    jap_order_id = Column(Integer, nullable=True, unique=True, index=True)  # JAP API order ID
+    jap_service_id = Column(Integer, nullable=False, index=True)  # Direct JAP service ID for reference
+    
+    # Order details
+    link = Column(String(1000), nullable=False)  # Social media link
     quantity = Column(Integer, nullable=False)
     charge = Column(Float, nullable=False)  # Total cost in coins
+    charge_usd = Column(Float, nullable=True)  # Total cost in USD
+    
+    # Status and progress
     status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
-    start_count = Column(Integer, nullable=True)
-    remains = Column(Integer, nullable=True)
+    start_count = Column(Integer, nullable=True)  # Current delivered count
+    remains = Column(Integer, nullable=True)  # Remaining count to deliver
+    
+    # JAP API specific fields
+    jap_charge = Column(Float, nullable=True)  # JAP API charge amount
+    jap_currency = Column(String(10), nullable=True, default="USD")  # JAP API currency
+    jap_status = Column(String(50), nullable=True)  # JAP API status string
+    
+    # Additional metadata
+    meta_data = Column(JSON, nullable=True)  # Store additional JAP API data
+    notes = Column(Text, nullable=True)  # Admin notes or user notes
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -193,10 +234,24 @@ class Order(Base):
     __table_args__ = (
         Index('ix_orders_user_status', 'user_id', 'status'),
         Index('ix_orders_status_created', 'status', 'created_at'),
+        Index('ix_orders_jap_order_id', 'jap_order_id'),
+        Index('ix_orders_jap_service_id', 'jap_service_id'),
     )
     
     def __repr__(self):
-        return f"<Order(user_id={self.user_id}, service_id={self.service_id}, charge={self.charge})>"
+        return f"<Order(user_id={self.user_id}, service_id={self.service_id}, jap_order_id={self.jap_order_id}, charge={self.charge})>"
+
+
+class JAPBalance(Base):
+    __tablename__ = "jap_balances"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    balance = Column(Float, nullable=False)  # Current balance
+    currency = Column(String(10), nullable=False, default="USD")
+    last_updated = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    def __repr__(self):
+        return f"<JAPBalance(balance={self.balance}, currency={self.currency})>"
 
 
 class Setting(Base):

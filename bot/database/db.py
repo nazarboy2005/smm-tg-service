@@ -33,14 +33,17 @@ class DatabaseManager:
                 echo=settings.environment == "development",
                 pool_pre_ping=True,
                 pool_recycle=300,  # Shorter for pgbouncer compatibility
-                pool_size=5,  # Increase pool size for better concurrency
-                max_overflow=10,  # Increase overflow for high load
+                pool_size=3,  # Reduce pool size to prevent connection issues
+                max_overflow=5,  # Reduce overflow to prevent connection exhaustion
+                pool_timeout=30,  # Add timeout for getting connections
+                pool_reset_on_return='commit',  # Reset connections on return
                 connect_args={
                     "command_timeout": 30,  # Reasonable timeout
                     "statement_cache_size": 0,  # Disable prepared statements for pgbouncer
                     "prepared_statement_cache_size": 0,  # Disable prepared statement cache
                     "server_settings": {
                         "jit": "off",  # Disable JIT for pgbouncer compatibility
+                        "application_name": "smm_bot",  # Add application name for monitoring
                     }
                 },
                 # Disable query compilation caching for pgbouncer
@@ -54,7 +57,7 @@ class DatabaseManager:
                 bind=self.engine,
                 class_=AsyncSession,
                 expire_on_commit=False,
-                autoflush=True,
+                autoflush=False,  # Disable autoflush to prevent premature commits
                 autocommit=False
             )
             
@@ -104,14 +107,24 @@ class DatabaseManager:
         session = self.async_session_maker()
         try:
             yield session
-            await session.commit()
+            # Only commit if there are pending changes
+            if session.dirty or session.new or session.deleted:
+                await session.commit()
         except Exception as e:
-            await session.rollback()
+            try:
+                await session.rollback()
+            except Exception as rollback_error:
+                logger.warning(f"Error during rollback: {rollback_error}")
             logger.error(f"Database session error: {e}")
             raise
         finally:
             try:
-                await session.close()
+                # Ensure session is properly closed
+                if not session.is_active:
+                    # Session is already closed, skip
+                    pass
+                else:
+                    await session.close()
             except Exception as close_error:
                 logger.warning(f"Error closing session: {close_error}")
                 # Don't raise, just log the warning
@@ -142,15 +155,6 @@ async def get_db_simple():
     return session
 
 
-async def get_db_simple():
-    """Get a simple database session - use with try/finally"""
-    if not db_manager._initialized:
-        await db_manager.initialize()
-    
-    session = db_manager.async_session_maker()
-    return session
-
-
 async def get_db_session():
     """Get a single database session for handlers - DEPRECATED, use get_db() instead"""
     if not db_manager._initialized:
@@ -161,6 +165,16 @@ async def get_db_session():
     return session
 
 
+async def initialize():
+    """Initialize database connection"""
+    await db_manager.initialize()
+
+
+async def create_tables():
+    """Create database tables"""
+    await db_manager.create_tables()
+
+
 async def init_db():
     """Initialize database and create tables"""
     await db_manager.initialize()
@@ -168,5 +182,10 @@ async def init_db():
 
 
 async def close_db():
+    """Close database connection"""
+    await db_manager.close()
+
+
+async def close():
     """Close database connection"""
     await db_manager.close()

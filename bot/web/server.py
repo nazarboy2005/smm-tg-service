@@ -85,10 +85,12 @@ async def webhook(request: Request):
             from aiogram.types import Update
             update = Update(**update_data)
             
-            # Process update without timeout to avoid context manager issues
-            # The dispatcher will handle its own timeout internally
+            # Create a new task to handle the update in the current event loop
+            # This prevents "different loop" errors and timeout context issues
             try:
-                await dp.feed_update(bot, update)
+                # Use asyncio.create_task to ensure proper task context
+                task = asyncio.create_task(dp.feed_update(bot, update))
+                await task
                 logger.debug("Update processed successfully")
             except Exception as update_error:
                 logger.error(f"Error processing update: {update_error}")
