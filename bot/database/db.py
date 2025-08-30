@@ -41,6 +41,7 @@ class DatabaseManager:
                     "command_timeout": 30,  # Reasonable timeout
                     "statement_cache_size": 0,  # Disable prepared statements for pgbouncer
                     "prepared_statement_cache_size": 0,  # Disable prepared statement cache
+                    "prepared_statement_name_func": None,  # Disable prepared statement naming
                     "server_settings": {
                         "jit": "off",  # Disable JIT for pgbouncer compatibility
                         "application_name": "smm_bot",  # Add application name for monitoring
@@ -49,6 +50,7 @@ class DatabaseManager:
                 # Disable query compilation caching for pgbouncer
                 execution_options={
                     "compiled_cache": {},
+                    "schema_translate_map": None,  # Disable schema translation caching
                 }
             )
             
