@@ -636,6 +636,277 @@ async def handle_services_menu(callback: CallbackQuery):
         await callback.answer("❌ Error")
 
 
+@router.callback_query(F.data == "menu_settings")
+async def handle_settings_menu(callback: CallbackQuery):
+    """Handle settings menu"""
+    try:
+        async for db in get_db():
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    balance = await BalanceService.get_user_balance(db, user.id)
+                    
+                    # Enhanced settings menu with balance display
+                    text = f"⚙️ {get_text('settings_menu', language)}\n\n"
+                    text += f"💰 <b>{get_text('your_balance', language, balance=balance:,.0f)}</b>\n"
+                    text += f"👤 <b>Username:</b> @{user.username or 'Not set'}\n"
+                    text += f"🌐 <b>{get_text('current_language', language, language=get_language_name(language))}</b>\n"
+                    text += f"📅 <b>Member since:</b> {user.created_at.strftime('%Y-%m-%d')}\n"
+                    
+                    # Add referral info if available
+                    if user.referral_code:
+                        bot_info = await callback.bot.get_me()
+                        referral_link = f"https://t.me/{bot_info.username}?start=ref_{user.referral_code}"
+                        text += f"🔗 <b>Your Referral Link:</b>\n<code>{referral_link}</code>\n"
+                    
+                    await callback.message.edit_text(
+                        text,
+                        reply_markup=get_settings_keyboard(language)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in settings menu: {db_error}")
+                await callback.answer("❌ Database error")
+                break
+    except Exception as e:
+        logger.error(f"Error in settings menu: {e}")
+        await callback.answer("❌ Error loading settings")
+
+
+@router.callback_query(F.data == "settings_language")
+async def handle_language_settings(callback: CallbackQuery):
+    """Handle language settings"""
+    try:
+        async for db in get_db():
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    await callback.message.edit_text(
+                        get_text("choose_language", language),
+                        reply_markup=get_language_keyboard()
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in language settings: {db_error}")
+                await callback.answer("❌ Database error")
+                break
+    except Exception as e:
+        logger.error(f"Error in language settings: {e}")
+        await callback.answer("❌ Error")
+
+
+@router.callback_query(F.data == "menu_support")
+async def handle_support_menu(callback: CallbackQuery, user_language: Language = None):
+    """Handle support menu"""
+    try:
+        async for db in get_db():
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = user_language or Language(user.language.value)
+                    
+                    # Enhanced support message with contact options
+                    text = f"🆘 <b>{get_text('support', language)}</b>\n\n"
+                    text += f"{get_text('need_help', language)}\n\n"
+                    text += f"📧 <b>{get_text('contact_methods', language)}</b>\n"
+                    text += f"• Email: support@smmbot.com\n"
+                    text += f"• Telegram: @smmbot_support\n"
+                    text += f"• Website: https://smmbot.com\n\n"
+                    text += f"⏰ <b>{get_text('support_hours', language)}</b>\n"
+                    text += f"• 24/7 Available\n"
+                    text += f"• Response time: &lt; 2 hours\n\n"
+                    text += f"📋 <b>{get_text('common_issues', language)}</b>\n"
+                    text += f"• {get_text('payment_problems', language)}\n"
+                    text += f"• {get_text('order_status_questions', language)}\n"
+                    text += f"• {get_text('account_issues', language)}\n"
+                    text += f"• {get_text('technical_problems', language)}\n\n"
+                    text += f"💡 <b>{get_text('before_contacting_support', language)}</b>\n"
+                    text += f"• {get_text('check_order_history', language)}\n"
+                    text += f"• {get_text('verify_payment_status', language)}\n"
+                    text += f"• {get_text('read_faq_section', language)}\n\n"
+                    text += f"<i>{get_text('select_option_below', language)}</i>"
+                    
+                    # Create support keyboard with contact options
+                    support_keyboard = InlineKeyboardBuilder()
+                    
+                    support_keyboard.button(
+                        text=f"📝 Contact Support 📝",
+                        callback_data="support_contact"
+                    )
+                    support_keyboard.button(
+                        text=f"❓ FAQ ❓",
+                        callback_data="support_faq"
+                    )
+                    support_keyboard.button(
+                        text=f"⬅️ {get_text('back', language)} ⬅️",
+                        callback_data="menu_main"
+                    )
+                    
+                    support_keyboard.adjust(1)
+                    
+                    await callback.message.edit_text(
+                        text,
+                        reply_markup=support_keyboard.as_markup()
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in support menu: {db_error}")
+                await callback.answer("❌ Database error")
+                break
+    except Exception as e:
+        logger.error(f"Error in support menu: {e}")
+        await callback.answer("❌ Error loading support")
+
+
+@router.callback_query(F.data == "menu_referrals")
+async def handle_referrals_menu(callback: CallbackQuery):
+    """Handle referrals menu"""
+    try:
+        async for db in get_db():
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    # Get referral information
+                    referral_info = await ReferralService.get_user_referral_info(db, user.id)
+                    referral_bonus = await SettingsService.get_setting(db, "referral_bonus_coins", 1000)
+                    
+                    # Get bot info for referral link
+                    bot_info = await callback.bot.get_me()
+                    referral_link = f"https://t.me/{bot_info.username}?start=ref_{user.referral_code}"
+                    
+                    text = get_text("referral_info", language,
+                                  bonus=referral_bonus,
+                                  count=referral_info.total_referrals,
+                                  earned=referral_info.total_earned,
+                                  link=referral_link)
+                    
+                    await callback.message.edit_text(
+                        text,
+                        reply_markup=get_back_keyboard(language)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in referrals menu: {db_error}")
+                await callback.answer("❌ Database error")
+                break
+    except Exception as e:
+        logger.error(f"Error in referrals menu: {e}")
+        await callback.answer("❌ Error")
+
+
+@router.callback_query(F.data == "menu_popular")
+async def handle_popular_services(callback: CallbackQuery):
+    """Handle popular services menu"""
+    try:
+        async for db in get_db():
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    text = f"🔥 <b>{get_text('popular_services', language)}</b>\n\n"
+                    text += f"{get_text('popular_services_desc', language)}\n\n"
+                    text += f"💡 <i>{get_text('select_service_to_start', language)}</i>"
+                    
+                    await callback.message.edit_text(
+                        text,
+                        reply_markup=get_popular_services_keyboard(language)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in popular services: {db_error}")
+                await callback.answer("❌ Database error")
+                break
+    except Exception as e:
+        logger.error(f"Error in popular services: {e}")
+        await callback.answer("❌ Error")
+
+
+@router.callback_query(F.data == "menu_orders")
+async def handle_orders_menu(callback: CallbackQuery):
+    """Handle orders menu"""
+    try:
+        async for db in get_db():
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    # Get user's orders
+                    orders = await OrderService.get_user_orders(db, user.id, limit=5)
+                    
+                    if orders:
+                        text = f"📋 <b>{get_text('your_orders', language)}</b>\n\n"
+                        
+                        for order in orders:
+                            status_text = get_text(f"order_{order.status.value.lower()}", language)
+                            text += f"🆔 <b>Order #{order.id}</b>\n"
+                            text += f"📊 Service: {order.service_name}\n"
+                            text += f"🔗 Link: {order.link[:50]}...\n"
+                            text += f"🔢 Quantity: {order.quantity:,}\n"
+                            text += f"💰 Cost: {order.cost:,} coins\n"
+                            text += f"📊 Status: {status_text}\n"
+                            text += f"📅 Created: {order.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+                    else:
+                        text = f"📋 <b>{get_text('your_orders', language)}</b>\n\n"
+                        text += f"{get_text('no_orders', language)}"
+                    
+                    await callback.message.edit_text(
+                        text,
+                        reply_markup=get_orders_keyboard(language, has_orders=bool(orders))
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in orders menu: {db_error}")
+                await callback.answer("❌ Database error")
+                break
+    except Exception as e:
+        logger.error(f"Error in orders menu: {e}")
+        await callback.answer("❌ Error")
+
+
+# Platform handlers
+@router.callback_query(F.data.startswith("platform_"))
+async def handle_platform_selection(callback: CallbackQuery):
+    """Handle platform selection"""
+    try:
+        platform = callback.data.split("_")[1]
+        
+        async for db in get_db():
+            try:
+                user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+                if user:
+                    language = Language(user.language.value)
+                    
+                    # Get platform-specific text
+                    platform_names = {
+                        "telegram": get_text("telegram_services", language),
+                        "instagram": get_text("instagram_services", language), 
+                        "tiktok": get_text("tiktok_services", language),
+                        "youtube": get_text("youtube_services", language)
+                    }
+                    
+                    platform_name = platform_names.get(platform, f"{platform.title()} Services")
+                    
+                    await callback.message.edit_text(
+                        f"📊 {platform_name}\n\n{get_text('choose_service_type', language)}",
+                        reply_markup=get_platform_services_keyboard(platform, language)
+                    )
+                break
+            except Exception as db_error:
+                logger.error(f"Database error in platform selection: {db_error}")
+                await callback.answer("❌ Database error")
+                break
+    except Exception as e:
+        logger.error(f"Error in platform selection: {e}")
+        await callback.answer("❌ Error")
+
+
 # Sticker handlers
 @router.message(F.sticker)
 async def handle_sticker(message: Message):

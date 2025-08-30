@@ -177,7 +177,7 @@ async def handle_admin_analytics(callback: CallbackQuery):
                 # Get analytics data
                 analytics = await AdminService.get_analytics_data(db, days=7)
                 
-                text = f"📈 {get_text('analytics', language)} (Last 7 days)\n\n"
+                text = f"📈 {get_text('analytics', language)} ({get_text('last_7_days', language)})\n\n"
                 
                 # Registrations
                 registrations = analytics.get('registrations', [])

@@ -34,3 +34,4 @@ paypalrestsdk>=1.13.1
 
 # Utilities
 python-dotenv>=1.0.0
+itsdangerous

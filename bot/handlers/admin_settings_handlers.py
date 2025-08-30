@@ -104,7 +104,7 @@ async def handle_admin_settings(callback: CallbackQuery):
                 categories = await SettingsService.get_settings_by_category(db)
                 
                 text = f"⚙️ {get_text('settings_admin', language)}\n\n"
-                text += "Choose a category to manage:"
+                text += f"{get_text('choose_category', language)}:"
                 
                 await callback.message.edit_text(
                     text,
@@ -140,7 +140,7 @@ async def handle_settings_category(callback: CallbackQuery):
                 
                 if selected_category and selected_settings:
                     text = f"⚙️ {selected_category}\n\n"
-                    text += "Click on a setting to modify it:"
+                    text += f"{get_text('choose_service', language)}:"
                     
                     await callback.message.edit_text(
                         text,
@@ -149,7 +149,7 @@ async def handle_settings_category(callback: CallbackQuery):
                         )
                     )
                 else:
-                    await callback.answer("❌ Category not found")
+                    await callback.answer(f"❌ {get_text('error', language)}")
             break
     except Exception as e:
         logger.error(f"Error in settings category: {e}")
@@ -183,7 +183,7 @@ async def handle_setting_view(callback: CallbackQuery):
                         reply_markup=create_setting_edit_keyboard(setting_key, language)
                     )
                 else:
-                    await callback.answer("❌ Setting not found")
+                    await callback.answer(f"❌ {get_text('error', language)}")
             break
     except Exception as e:
         logger.error(f"Error viewing setting: {e}")
@@ -221,7 +221,7 @@ async def handle_setting_edit(callback: CallbackQuery, state: FSMContext):
                         reply_markup=get_back_keyboard(language, "admin_settings")
                     )
                 else:
-                    await callback.answer("❌ Setting not found")
+                    await callback.answer(f"❌ {get_text('error', language)}")
             break
     except Exception as e:
         logger.error(f"Error editing setting: {e}")
@@ -237,7 +237,7 @@ async def handle_setting_value_input(message: Message, state: FSMContext):
         new_value = message.text.strip()
         
         if not setting_key:
-            await message.answer("❌ Error: Setting key not found")
+            await message.answer(get_text("setting_key_not_found", language))
             await state.clear()
             return
         
@@ -250,7 +250,7 @@ async def handle_setting_value_input(message: Message, state: FSMContext):
                 is_valid, error_msg = await SettingsService.validate_setting_value(setting_key, new_value)
                 
                 if not is_valid:
-                    await message.answer(f"❌ Invalid value: {error_msg}\nPlease try again.")
+                    await message.answer(f"{get_text('invalid_value', language)}: {error_msg}\n{get_text('please_try_again', language)}")
                     return
                 
                 # Set the new value
@@ -261,13 +261,13 @@ async def handle_setting_value_input(message: Message, state: FSMContext):
                         f"✅ Setting **{setting_key.replace('_', ' ').title()}** updated to: `{new_value}`"
                     )
                 else:
-                    await message.answer("❌ Failed to update setting")
+                    await message.answer(get_text("error_updating_setting", language))
                 
                 await state.clear()
             break
     except Exception as e:
         logger.error(f"Error handling setting value input: {e}")
-        await message.answer("❌ Error updating setting")
+        await message.answer(get_text("error_updating_setting", language))
         await state.clear()
 
 
@@ -338,7 +338,7 @@ async def cmd_config(message: Message):
             break
     except Exception as e:
         logger.error(f"Error in config command: {e}")
-        await message.answer("❌ Error getting configuration")
+        await message.answer(get_text("error_getting_configuration", language))
 
 
 @router.message(Command("export_settings"))
@@ -365,7 +365,7 @@ async def cmd_export_settings(message: Message):
             break
     except Exception as e:
         logger.error(f"Error exporting settings: {e}")
-        await message.answer("❌ Error exporting settings")
+        await message.answer(get_text("error_exporting_settings", language))
 
 
 @router.message(Command("quick_config"))
@@ -398,7 +398,7 @@ async def cmd_quick_config(message: Message):
                 is_valid, error_msg = await SettingsService.validate_setting_value(setting_key, new_value)
                 
                 if not is_valid:
-                    await message.answer(f"❌ Invalid value: {error_msg}")
+                    await message.answer(f"{get_text('invalid_value', language)}: {error_msg}")
                     return
                 
                 success = await SettingsService.set_setting(db, setting_key, new_value, user.id)
@@ -412,4 +412,4 @@ async def cmd_quick_config(message: Message):
             break
     except Exception as e:
         logger.error(f"Error in quick config: {e}")
-        await message.answer("❌ Error updating setting")
+        await message.answer(get_text("error_updating_setting", language))
