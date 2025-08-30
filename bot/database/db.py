@@ -33,8 +33,8 @@ class DatabaseManager:
                 echo=settings.environment == "development",
                 pool_pre_ping=True,
                 pool_recycle=300,  # Shorter for pgbouncer compatibility
-                pool_size=3,  # Reduce pool size to prevent connection issues
-                max_overflow=5,  # Reduce overflow to prevent connection exhaustion
+                pool_size=1,  # Minimal pool size for pgbouncer
+                max_overflow=2,  # Minimal overflow for pgbouncer
                 pool_timeout=30,  # Add timeout for getting connections
                 pool_reset_on_return='commit',  # Reset connections on return
                 connect_args={

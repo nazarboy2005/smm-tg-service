@@ -82,13 +82,18 @@ async def initialize_bot():
         webhook_url = f"{webhook_base}/webhook"
         logger.info(f"Setting up webhook at: {webhook_url}")
         
-        await bot.set_webhook(
-            url=webhook_url,
-            drop_pending_updates=True,
-            allowed_updates=["message", "callback_query"]
-        )
-        logger.info(f"Webhook set successfully: {webhook_url}")
-        logger.info("🤖 Bot is ready to receive messages!")
+        try:
+            await bot.set_webhook(
+                url=webhook_url,
+                drop_pending_updates=True,
+                allowed_updates=["message", "callback_query"]
+            )
+            logger.info(f"Webhook set successfully: {webhook_url}")
+            logger.info("🤖 Bot is ready to receive messages!")
+        except Exception as e:
+            logger.error(f"Failed to set webhook: {e}")
+            # Don't fail the startup, just log the error
+            logger.warning("Bot will continue without webhook setup")
         
     except Exception as e:
         logger.error(f"Error initializing bot: {e}")
@@ -174,4 +179,10 @@ if __name__ == "__main__":
         await server.serve()
     
     # Run the server
-    asyncio.run(start_server())
+    try:
+        asyncio.run(start_server())
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        sys.exit(1)

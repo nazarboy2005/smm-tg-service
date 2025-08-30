@@ -5,6 +5,7 @@ Main bot application - Updated for JAP API compatibility
 import asyncio
 import sys
 import signal
+import os
 from loguru import logger
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -192,7 +193,9 @@ async def main():
         logger.info("Running in webhook mode...")
         
         # Set up webhook
-        webhook_url = f"https://smm-tg-service-production.up.railway.app/webhook"
+        # Get webhook URL from environment or use default
+        webhook_base = os.environ.get("WEBHOOK_BASE_URL", "https://smm-tg-service-production.up.railway.app")
+        webhook_url = f"{webhook_base}/webhook"
         logger.info(f"Setting up webhook at: {webhook_url}")
         
         try:
@@ -205,10 +208,10 @@ async def main():
             logger.info("Bot is now running in webhook mode.")
             logger.info("🤖 Bot is ready to receive messages!")
             
-            # Keep the bot running
-            while True:
-                await asyncio.sleep(1)
-                
+            # For webhook mode, we don't need to keep the bot running
+            # The web server will handle incoming requests
+            logger.info("Bot initialization complete. Web server will handle incoming requests.")
+            
         except Exception as e:
             logger.error(f"Failed to set webhook: {e}")
             return
