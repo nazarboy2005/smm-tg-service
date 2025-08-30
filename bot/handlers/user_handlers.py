@@ -71,16 +71,16 @@ class PaymentStates(StatesGroup):
 async def cmd_start(message: Message, state: FSMContext, user_language: Language = None):
     """Handle /start command"""
     try:
+        # Parse referral code from start parameter
+        referral_code = None
+        if message.text and len(message.text.split()) > 1:
+            start_param = message.text.split()[1]
+            if start_param.startswith("ref_"):
+                referral_code = start_param[4:]
+                logger.info(f"User {message.from_user.id} using referral code: {referral_code}")
+        
         # Get database session using proper async context manager
         async for db in get_db():
-            # Parse referral code from start parameter
-            referral_code = None
-            if message.text and len(message.text.split()) > 1:
-                start_param = message.text.split()[1]
-                if start_param.startswith("ref_"):
-                    referral_code = start_param[4:]
-                    logger.info(f"User {message.from_user.id} using referral code: {referral_code}")
-            
             # Get or create user
             user = await UserService.create_user(
                 db=db,
@@ -137,7 +137,7 @@ async def cmd_start(message: Message, state: FSMContext, user_language: Language
             
             # Update user activity
             await UserService.update_user_activity(db, user.id)
-            break
+            return  # Exit after successful processing
             
     except Exception as e:
         logger.error(f"Error in start command: {e}")
@@ -163,7 +163,7 @@ async def handle_language_selection(callback: CallbackQuery):
                     get_text("language_selected", language),
                     reply_markup=get_main_menu_keyboard(language, user.is_admin)
                 )
-            break
+            return
             
     except Exception as e:
         logger.error(f"Error in language selection: {e}")
@@ -184,7 +184,7 @@ async def handle_main_menu(callback: CallbackQuery, user_language: Language = No
                     get_text("main_menu", language),
                     reply_markup=get_main_menu_keyboard(language, user.is_admin)
                 )
-            break
+            return
     except Exception as e:
         logger.error(f"Error in main menu: {e}")
         await callback.answer("❌ Error")
@@ -221,7 +221,7 @@ async def handle_balance_menu(callback: CallbackQuery, user_language: Language =
                     text,
                     reply_markup=get_balance_menu_keyboard(language)
                 )
-            break
+            return
     except Exception as e:
         logger.error(f"Error in balance menu: {e}")
         await callback.answer("❌ Error loading balance")
@@ -240,7 +240,7 @@ async def handle_add_balance(callback: CallbackQuery):
                     get_text("choose_payment_method", language),
                     reply_markup=await get_payment_methods_keyboard(db, language)
                 )
-            break
+            return
     except Exception as e:
         logger.error(f"Error in add balance: {e}")
         await callback.answer("❌ Error")

@@ -37,6 +37,8 @@ class DatabaseManager:
                 max_overflow=10,  # Increase overflow for high load
                 connect_args={
                     "command_timeout": 30,  # Reasonable timeout
+                    "statement_cache_size": 0,  # Disable prepared statements for pgbouncer
+                    "prepared_statement_cache_size": 0,  # Disable prepared statement cache
                     "server_settings": {
                         "jit": "off",  # Disable JIT for pgbouncer compatibility
                     }
@@ -99,14 +101,20 @@ class DatabaseManager:
         if not self._initialized:
             await self.initialize()
         
-        async with self.async_session_maker() as session:
+        session = self.async_session_maker()
+        try:
+            yield session
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Database session error: {e}")
+            raise
+        finally:
             try:
-                yield session
-            except Exception as e:
-                await session.rollback()
-                logger.error(f"Database session error: {e}")
-                raise
-            # Note: session.close() is automatically called by the context manager
+                await session.close()
+            except Exception as close_error:
+                logger.warning(f"Error closing session: {close_error}")
+                # Don't raise, just log the warning
     
     async def close(self):
         """Close database connection"""
@@ -123,6 +131,24 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get database session"""
     async for session in db_manager.get_session():
         yield session
+
+
+async def get_db_simple():
+    """Get a simple database session - use with try/finally"""
+    if not db_manager._initialized:
+        await db_manager.initialize()
+    
+    session = db_manager.async_session_maker()
+    return session
+
+
+async def get_db_simple():
+    """Get a simple database session - use with try/finally"""
+    if not db_manager._initialized:
+        await db_manager.initialize()
+    
+    session = db_manager.async_session_maker()
+    return session
 
 
 async def get_db_session():
