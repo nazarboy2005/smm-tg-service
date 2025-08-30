@@ -84,11 +84,12 @@ async def cmd_help(message: Message):
         logger.error(f"Error in help command: {e}")
 
 
-@router.message()
-async def echo_handler(message: Message):
-    """Echo handler for any message"""
-    try:
-        logger.info(f"Echo from user {message.from_user.id}: {message.text}")
-        await message.answer(f"📝 You said: {message.text}")
-    except Exception as e:
-        logger.error(f"Error in echo handler: {e}")
+# Commented out echo handler to prevent conflicts with command handlers
+# @router.message()
+# async def echo_handler(message: Message):
+#     """Echo handler for any message"""
+#     try:
+#         logger.info(f"Echo from user {message.from_user.id}: {message.text}")
+#         await message.answer(f"📝 You said: {message.text}")
+#     except Exception as e:
+#         logger.error(f"Error in echo handler: {e}")

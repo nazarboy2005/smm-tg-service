@@ -116,11 +116,32 @@ async def main():
         dp.message.middleware(LoggingMiddleware())
         dp.callback_query.middleware(LoggingMiddleware())
         
-        # Register handlers
-        dp.include_router(user_handlers.router)
-        dp.include_router(admin_handlers.router)
-        dp.include_router(admin_settings_handlers.router)
-        dp.include_router(support_handlers.router)
+        # Register main handlers first (higher priority)
+        try:
+            dp.include_router(user_handlers.router)
+            logger.info("User handlers registered")
+        except Exception as e:
+            logger.error(f"Failed to register user handlers: {e}")
+            
+        try:
+            dp.include_router(admin_handlers.router)
+            logger.info("Admin handlers registered")
+        except Exception as e:
+            logger.error(f"Failed to register admin handlers: {e}")
+            
+        try:
+            dp.include_router(admin_settings_handlers.router)
+            logger.info("Admin settings handlers registered")
+        except Exception as e:
+            logger.error(f"Failed to register admin settings handlers: {e}")
+            
+        try:
+            dp.include_router(support_handlers.router)
+            logger.info("Support handlers registered")
+        except Exception as e:
+            logger.error(f"Failed to register support handlers: {e}")
+        
+
         
         logger.info("Bot handlers registered")
         
