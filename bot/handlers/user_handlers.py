@@ -649,7 +649,7 @@ async def handle_settings_menu(callback: CallbackQuery):
                     
                     # Enhanced settings menu with balance display
                     text = f"⚙️ {get_text('settings_menu', language)}\n\n"
-                    text += f"💰 <b>{get_text('your_balance', language, balance=balance:,.0f)}</b>\n"
+                    text += f"💰 <b>{get_text('your_balance', language, balance=f'{balance:,.0f}')}</b>\n"
                     text += f"👤 <b>Username:</b> @{user.username or 'Not set'}\n"
                     text += f"🌐 <b>{get_text('current_language', language, language=get_language_name(language))}</b>\n"
                     text += f"📅 <b>Member since:</b> {user.created_at.strftime('%Y-%m-%d')}\n"
