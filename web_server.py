@@ -1,6 +1,6 @@
 """
 Web server entry point for Railway deployment
-This file starts the FastAPI web server and initializes the bot for webhook handling
+This file starts the FastAPI web server and initializes the bot for polling
 """
 import os
 import asyncio
@@ -25,7 +25,7 @@ bot = None
 dp = None
 
 async def initialize_bot():
-    """Initialize bot and dispatcher for webhook handling"""
+    """Initialize bot and dispatcher for polling"""
     global bot, dp
     
     try:
@@ -73,47 +73,41 @@ async def initialize_bot():
         
         logger.info("Bot handlers registered")
         
-        # Set bot and dispatcher for webhook handling
+        # Set bot and dispatcher for webhook handling (for web interface)
         set_bot_and_dispatcher(bot, dp)
         
-        # Set up webhook
-        # Get webhook URL from environment or use Railway's domain
-        webhook_base = os.environ.get("WEBHOOK_BASE_URL")
-        if not webhook_base:
-            # Try to get Railway's domain from environment
-            railway_domain = os.environ.get("RAILWAY_STATIC_URL")
-            if railway_domain:
-                webhook_base = f"https://{railway_domain}"
-            else:
-                # Fallback to default
-                webhook_base = "https://smm-tg-service-production.up.railway.app"
-        
-        webhook_url = f"{webhook_base}/webhook"
-        logger.info(f"Setting up webhook at: {webhook_url}")
-        
-        try:
-            await bot.set_webhook(
-                url=webhook_url,
-                drop_pending_updates=True,
-                allowed_updates=["message", "callback_query"]
-            )
-            logger.info(f"Webhook set successfully: {webhook_url}")
-            logger.info("🤖 Bot is ready to receive messages!")
-        except Exception as e:
-            logger.error(f"Failed to set webhook: {e}")
-            # Don't fail the startup, just log the error
-            logger.warning("Bot will continue without webhook setup")
+        # Start polling in background
+        logger.info("Starting bot polling...")
+        asyncio.create_task(start_polling())
         
     except Exception as e:
         logger.error(f"Error initializing bot: {e}")
         raise
 
+async def start_polling():
+    """Start bot polling"""
+    global bot, dp
+    
+    try:
+        # Delete webhook to ensure polling works
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Webhook deleted, starting polling...")
+        
+        # Start polling
+        await dp.start_polling(bot, skip_updates=True)
+    except Exception as e:
+        logger.error(f"Error in polling: {e}")
+
 async def shutdown_bot():
     """Shutdown bot gracefully"""
-    global bot
+    global bot, dp
     
     try:
         logger.info("Shutting down bot...")
+        
+        # Stop polling
+        if dp:
+            await dp.stop_polling()
         
         # Close payment providers
         try:
@@ -149,9 +143,6 @@ def signal_handler(signum, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-# Initialize bot when the module is imported
-# We'll initialize the bot manually since the app is created in bot.web.server
-
 if __name__ == "__main__":
     import uvicorn
     
@@ -163,7 +154,7 @@ if __name__ == "__main__":
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
     )
     
-    logger.info("Starting SMM Bot Web Server...")
+    logger.info("Starting SMM Bot with Polling...")
     
     # Initialize bot before starting the server
     async def start_server():
@@ -173,6 +164,7 @@ if __name__ == "__main__":
         port = int(os.environ.get("PORT", 8000))
         
         logger.info(f"Starting web server on 0.0.0.0:{port}")
+        logger.info("🤖 Bot is ready to receive messages via polling!")
         
         # Start server
         config = uvicorn.Config(

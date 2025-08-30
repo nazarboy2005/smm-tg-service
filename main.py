@@ -181,40 +181,23 @@ async def main():
         except Exception as e:
             logger.warning(f"JAP API test failed (this is normal if not configured): {e}")
         
-        # Set bot and dispatcher for webhook handling
+        # Set bot and dispatcher for webhook handling (for web interface)
         from bot.web.server import set_bot_and_dispatcher
         set_bot_and_dispatcher(bot, dp)
         
-        # Note: Web server is started separately by Railway/uvicorn
-        # We don't need to start it here as it will be started by the platform
-        logger.info("Web server will be started by the platform")
+        # Run in polling mode
+        logger.info("Running in polling mode...")
         
-        # Run in webhook mode
-        logger.info("Running in webhook mode...")
-        
-        # Set up webhook
-        # Get webhook URL from environment or use default
-        webhook_base = os.environ.get("WEBHOOK_BASE_URL", "https://smm-tg-service-production.up.railway.app")
-        webhook_url = f"{webhook_base}/webhook"
-        logger.info(f"Setting up webhook at: {webhook_url}")
-        
+        # Delete any existing webhook to ensure polling works
         try:
-            await bot.set_webhook(
-                url=webhook_url,
-                drop_pending_updates=True,
-                allowed_updates=["message", "callback_query"]
-            )
-            logger.info(f"Webhook set successfully: {webhook_url}")
-            logger.info("Bot is now running in webhook mode.")
-            logger.info("🤖 Bot is ready to receive messages!")
-            
-            # For webhook mode, we don't need to keep the bot running
-            # The web server will handle incoming requests
-            logger.info("Bot initialization complete. Web server will handle incoming requests.")
-            
+            await bot.delete_webhook(drop_pending_updates=True)
+            logger.info("Webhook deleted, starting polling...")
         except Exception as e:
-            logger.error(f"Failed to set webhook: {e}")
-            return
+            logger.warning(f"Failed to delete webhook: {e}")
+        
+        # Start polling
+        logger.info("🤖 Bot is ready to receive messages via polling!")
+        await dp.start_polling(bot, skip_updates=True)
         
     except Exception as e:
         logger.error(f"Error starting bot: {e}")
