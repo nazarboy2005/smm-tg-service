@@ -126,7 +126,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_db_session():
-    """Get a single database session for handlers - returns context manager"""
+    """Get a single database session for handlers - DEPRECATED, use get_db() instead"""
     if not db_manager._initialized:
         await db_manager.initialize()
     
