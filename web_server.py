@@ -77,8 +77,17 @@ async def initialize_bot():
         set_bot_and_dispatcher(bot, dp)
         
         # Set up webhook
-        # Get webhook URL from environment or use default
-        webhook_base = os.environ.get("WEBHOOK_BASE_URL", "https://smm-tg-service-production.up.railway.app")
+        # Get webhook URL from environment or use Railway's domain
+        webhook_base = os.environ.get("WEBHOOK_BASE_URL")
+        if not webhook_base:
+            # Try to get Railway's domain from environment
+            railway_domain = os.environ.get("RAILWAY_STATIC_URL")
+            if railway_domain:
+                webhook_base = f"https://{railway_domain}"
+            else:
+                # Fallback to default
+                webhook_base = "https://smm-tg-service-production.up.railway.app"
+        
         webhook_url = f"{webhook_base}/webhook"
         logger.info(f"Setting up webhook at: {webhook_url}")
         

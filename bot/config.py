@@ -84,6 +84,20 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
     
+    @field_validator('database_url')
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Validate and modify database URL for pgbouncer compatibility"""
+        if v and 'postgresql' in v:
+            # Add pgbouncer compatibility parameters if not present
+            if 'statement_cache_size=0' not in v:
+                separator = '&' if '?' in v else '?'
+                v += f"{separator}statement_cache_size=0"
+            if 'prepared_statement_cache_size=0' not in v:
+                separator = '&' if '?' in v else '?'
+                v += f"{separator}prepared_statement_cache_size=0"
+        return v
+    
     def __init__(self, **kwargs):
         # Handle admin_ids parsing before validation
         if 'admin_ids' in kwargs:
