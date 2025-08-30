@@ -127,7 +127,10 @@ async def main():
         # Initialize default settings
         try:
             from bot.services.settings_service import SettingsService
-            await SettingsService.initialize_default_settings()
+            from bot.database.db import get_db
+            async for db in get_db():
+                await SettingsService.initialize_default_settings(db)
+                break
             logger.info("Default settings initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize default settings: {e}")

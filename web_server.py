@@ -35,7 +35,10 @@ async def initialize_bot():
         logger.info("Database initialized successfully")
         
         # Initialize default settings
-        await SettingsService.initialize_default_settings()
+        from bot.database.db import get_db
+        async for db in get_db():
+            await SettingsService.initialize_default_settings(db)
+            break
         logger.info("Default settings initialized")
         
         # Initialize bot
