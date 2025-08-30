@@ -25,18 +25,20 @@ async def main():
         logger.remove()
         logger.add(
             sys.stdout,
-            level=settings.log_level,
+            level="INFO",
             format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
-        )
-        logger.add(
-            settings.log_file,
-            level=settings.log_level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-            rotation="10 MB",
-            retention="30 days"
         )
         
         logger.info("Starting SMM Bot...")
+        
+        # Check if we have basic configuration
+        if not hasattr(settings, 'bot_token') or not settings.bot_token:
+            logger.error("BOT_TOKEN not configured! Please set your bot token.")
+            logger.info("You can either:")
+            logger.info("1. Create a .env file with BOT_TOKEN=your_token")
+            logger.info("2. Set the BOT_TOKEN environment variable")
+            logger.info("3. Run simple_bot.py for a basic working version")
+            raise ValueError("BOT_TOKEN is required")
         
         # Initialize database with better error handling
         try:
@@ -44,8 +46,8 @@ async def main():
             logger.info("Database initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
-            logger.error("Please check your database configuration and connection")
-            raise
+            logger.warning("Running in basic mode without database - some features will be limited")
+            # Continue without database for basic functionality
         
         # Initialize bot with proper error handling
         try:
@@ -145,54 +147,56 @@ async def main():
         web_thread.start()
         logger.info("Web server started on port 8000")
         
-        # Force webhook mode for production deployment
-        webhook_url = settings.webhook_url
-        use_webhook = settings.use_webhook
+        # Check webhook configuration
+        webhook_url = getattr(settings, 'webhook_url', None)
+        use_webhook = getattr(settings, 'use_webhook', False)
         
         if use_webhook and webhook_url:
-            # First, clear any existing webhook to avoid conflicts
-            logger.info("Clearing any existing webhook...")
+            # Webhook mode
+            logger.info("Running in webhook mode...")
             try:
                 await bot.delete_webhook(drop_pending_updates=True)
-                await asyncio.sleep(2)  # Wait a bit for cleanup
+                await asyncio.sleep(2)
             except Exception as e:
-                logger.warning(f"Error clearing webhook (this is normal): {e}")
+                logger.warning(f"Error clearing webhook: {e}")
             
-            # Set up new webhook
-            webhook_secret = settings.webhook_secret if settings.webhook_secret else None
+            webhook_secret = getattr(settings, 'webhook_secret', None)
             logger.info(f"Setting up webhook at: {webhook_url}/webhook")
             
-            await bot.set_webhook(
-                url=f"{webhook_url}/webhook",
-                drop_pending_updates=True,
-                secret_token=webhook_secret
-            )
-            
-            # Verify webhook was set
-            webhook_info = await bot.get_webhook_info()
-            logger.info(f"Webhook set successfully: {webhook_info.url}")
-            logger.info("Bot is now running in webhook mode.")
-            
-            # Keep the main thread alive
-            import signal
-            def signal_handler(signum, frame):
-                logger.info("Received shutdown signal")
-                raise KeyboardInterrupt
-            
-            signal.signal(signal.SIGINT, signal_handler)
-            signal.signal(signal.SIGTERM, signal_handler)
-            
-            # Wait indefinitely
             try:
-                while True:
-                    await asyncio.sleep(10)  # Check every 10 seconds
-            except KeyboardInterrupt:
-                logger.info("Shutting down webhook bot...")
-                await bot.delete_webhook(drop_pending_updates=True)
+                await bot.set_webhook(
+                    url=f"{webhook_url}/webhook",
+                    drop_pending_updates=True,
+                    secret_token=webhook_secret
+                )
+                
+                webhook_info = await bot.get_webhook_info()
+                logger.info(f"Webhook set successfully: {webhook_info.url}")
+                logger.info("Bot is now running in webhook mode.")
+                
+                # Keep the main thread alive
+                import signal
+                def signal_handler(signum, frame):
+                    logger.info("Received shutdown signal")
+                    raise KeyboardInterrupt
+                
+                signal.signal(signal.SIGINT, signal_handler)
+                signal.signal(signal.SIGTERM, signal_handler)
+                
+                try:
+                    while True:
+                        await asyncio.sleep(10)
+                except KeyboardInterrupt:
+                    logger.info("Shutting down webhook bot...")
+                    await bot.delete_webhook(drop_pending_updates=True)
+            except Exception as e:
+                logger.error(f"Failed to set webhook: {e}")
+                logger.info("Falling back to polling mode...")
+                await dp.start_polling(bot)
         else:
-            logger.error("Webhook mode is required but not properly configured!")
-            logger.error(f"use_webhook: {use_webhook}, webhook_url: {webhook_url}")
-            raise ValueError("Webhook configuration is required for production deployment")
+            # Polling mode (default for development)
+            logger.info("Running in polling mode...")
+            await dp.start_polling(bot)
         
     except Exception as e:
         logger.error(f"Error starting bot: {e}")

@@ -11,24 +11,24 @@ class Settings(BaseSettings):
     """Application settings"""
     
     # Bot Configuration
-    bot_token: str = Field(..., env="BOT_TOKEN")
+    bot_token: str = Field(default="", env="BOT_TOKEN")
     bot_username: str = Field(default="", env="BOT_USERNAME")
     admin_ids: List[int] = Field(default_factory=list, env="ADMIN_IDS")
     
     # Database Configuration
-    database_url: str = Field(..., env="DATABASE_URL")
+    database_url: str = Field(default="", env="DATABASE_URL")
     db_host: str = Field(default="localhost", env="DB_HOST")
     db_port: int = Field(default=5432, env="DB_PORT")
-    db_name: str = Field(..., env="DB_NAME")
-    db_user: str = Field(..., env="DB_USER")
-    db_password: str = Field(..., env="DB_PASSWORD")
+    db_name: str = Field(default="", env="DB_NAME")
+    db_user: str = Field(default="", env="DB_USER")
+    db_password: str = Field(default="", env="DB_PASSWORD")
     
     # Redis Configuration
     redis_url: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
     
     # JAP API Configuration
-    jap_api_url: str = Field(..., env="JAP_API_URL")
-    jap_api_key: str = Field(..., env="JAP_API_KEY")
+    jap_api_url: str = Field(default="", env="JAP_API_URL")
+    jap_api_key: str = Field(default="", env="JAP_API_KEY")
     
     # Payment Configuration
     coingate_api_token: str = Field(default="", env="COINGATE_API_TOKEN")
@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     max_deposit_usd: float = Field(default=1000.0, env="MAX_DEPOSIT_USD")
     
     # Security
-    secret_key: str = Field(..., env="SECRET_KEY")
+    secret_key: str = Field(default="your_secret_key_for_jwt_and_encryption_please_change_this", env="SECRET_KEY")
     webhook_secret: str = Field(default="", env="WEBHOOK_SECRET")
     
     # Logging
