@@ -4,7 +4,7 @@
     "builder": "DOCKERFILE"
   },
   "deploy": {
-    "startCommand": "python main.py",
+    "startCommand": "python web_server.py",
     "healthcheckPath": "/",
     "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",

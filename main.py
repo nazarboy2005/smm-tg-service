@@ -13,7 +13,7 @@ from aiogram.enums import ParseMode
 from bot.config import settings
 from bot.handlers import user_handlers, admin_handlers, admin_settings_handlers, support_handlers
 from bot.middleware import SecurityMiddleware, LoggingMiddleware, LanguageMiddleware
-from bot.web.server import start_web_server
+
 
 # Global variables for cleanup
 bot = None
@@ -32,8 +32,8 @@ async def shutdown():
         
         # Close payment providers
         try:
-            from bot.services.payment_service import PaymentService
-            await PaymentService.close_all_providers()
+            from bot.services.payment_service import payment_service
+            await payment_service.close_all_providers()
             logger.info("Closed all payment provider connections")
         except Exception as e:
             logger.warning(f"Error closing payment providers: {e}")
@@ -72,8 +72,8 @@ async def main():
         
         # Initialize payment providers
         try:
-            from bot.services.payment_service import PaymentService
-            await PaymentService.initialize_providers()
+            from bot.services.payment_service import payment_service
+            # Payment providers are automatically initialized when the service is created
             logger.info("Payment providers initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize payment providers: {e}")
@@ -156,16 +156,13 @@ async def main():
         except Exception as e:
             logger.warning(f"JAP API test failed (this is normal if not configured): {e}")
         
-        # Start web server
-        logger.info("Starting web server...")
-        
         # Set bot and dispatcher for webhook handling
         from bot.web.server import set_bot_and_dispatcher
         set_bot_and_dispatcher(bot, dp)
         
-        # Start web server in background
-        web_server_task = asyncio.create_task(start_web_server())
-        logger.info("Web server started on port 8000")
+        # Note: Web server is started separately by Railway/uvicorn
+        # We don't need to start it here as it will be started by the platform
+        logger.info("Web server will be started by the platform")
         
         # Run in webhook mode
         logger.info("Running in webhook mode...")
