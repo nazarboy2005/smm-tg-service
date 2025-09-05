@@ -1,517 +1,1099 @@
 """
-Admin service for management operations
+Admin Service Management System
+Allows admins to control JAP services availability for users
 """
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, and_, or_
-from sqlalchemy.orm import selectinload
+import json
+from typing import List, Dict, Optional, Any, Set
 from loguru import logger
-from datetime import datetime, timedelta
-
-from bot.database.models import (
-    User, Balance, Transaction, Order, Service, ServiceCategory,
-    Setting, ReferralReward, TransactionType, TransactionStatus, OrderStatus
-)
-from bot.services.balance_service import BalanceService
-from bot.services.referral_service import ReferralService
-from bot.services.service_service import ServiceService
-from bot.services.order_service import OrderService
+from bot.database.db import db_manager
+from bot.services.jap_service import jap_service
 
 
-class AdminService:
-    """Service for admin operations"""
+class AdminServiceManager:
+    """Manages service availability and access control for users"""
     
-    @staticmethod
-    async def get_dashboard_stats(db: AsyncSession) -> Dict[str, Any]:
-        """Get admin dashboard statistics"""
+    def __init__(self):
+        self.service_settings_cache = {}
+        self.user_access_cache = {}
+        self.price_cache = {}
+        self.cache_ttl = 300  # 5 minutes cache
+        
+        # Service filtering configuration
+        self.allowed_telegram_services = {
+            "7337", "7348", "7360", "7364", "7368", "7357", "7324", "7327", 
+            "8619", "7328", "7762", "819", "1973", "7102", "7330", "1166", "8525"
+        }
+        self.disabled_platforms = {"instagram"}  # Platforms to disable
+    
+    async def initialize(self):
+        """Initialize the admin service manager"""
         try:
-            # User stats
-            total_users_result = await db.execute(select(func.count(User.id)))
-            total_users = total_users_result.scalar() or 0
+            # Create service management tables if they don't exist
+            await self._create_service_tables()
+            logger.info("Admin service manager initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize admin service manager: {e}")
+    
+    async def _create_service_tables(self):
+        """Create necessary database tables for service management"""
+        try:
+            # Service settings table
+            await db_manager.execute("""
+                CREATE TABLE IF NOT EXISTS service_settings (
+                    id SERIAL PRIMARY KEY,
+                    setting_key VARCHAR(100) UNIQUE NOT NULL,
+                    setting_value TEXT NOT NULL,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             
-            # Active users (last 7 days)
-            week_ago = datetime.utcnow() - timedelta(days=7)
-            active_users_result = await db.execute(
-                select(func.count(User.id.distinct()))
-                .where(User.last_activity >= week_ago)
+            # Service access control table
+            await db_manager.execute("""
+                CREATE TABLE IF NOT EXISTS service_access_control (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    service_id INTEGER,
+                    service_type VARCHAR(50),
+                    platform VARCHAR(50),
+                    is_active BOOLEAN DEFAULT true,
+                    access_level VARCHAR(20) DEFAULT 'full',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, service_id),
+                    UNIQUE(user_id, service_type, platform)
+                )
+            """)
+            
+            # Service pricing table
+            await db_manager.execute("""
+                CREATE TABLE IF NOT EXISTS service_pricing (
+                    id SERIAL PRIMARY KEY,
+                    service_id INTEGER NOT NULL,
+                    platform VARCHAR(50),
+                    service_type VARCHAR(50),
+                    jap_price_usd DECIMAL(10,4) NOT NULL,
+                    custom_price_usd DECIMAL(10,4),
+                    custom_price_coins INTEGER,
+                    markup_percentage DECIMAL(5,2) DEFAULT 0,
+                    min_markup_usd DECIMAL(10,4) DEFAULT 0,
+                    max_markup_usd DECIMAL(10,4) DEFAULT 999.99,
+                    is_active BOOLEAN DEFAULT true,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(service_id)
+                )
+            """)
+            
+            # Service categories table
+            await db_manager.execute("""
+                CREATE TABLE IF NOT EXISTS service_categories (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    platform VARCHAR(50),
+                    is_active BOOLEAN DEFAULT true,
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Cached services table - stores approved services from JAP
+            await db_manager.execute("""
+                CREATE TABLE IF NOT EXISTS cached_services (
+                    id SERIAL PRIMARY KEY,
+                    service_id INTEGER UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    platform VARCHAR(50),
+                    service_type VARCHAR(50),
+                    rate DECIMAL(10,4),
+                    min_quantity INTEGER,
+                    max_quantity INTEGER,
+                    dripfeed BOOLEAN DEFAULT false,
+                    refill BOOLEAN DEFAULT false,
+                    cancel BOOLEAN DEFAULT false,
+                    category TEXT,
+                    is_approved BOOLEAN DEFAULT false,
+                    is_active BOOLEAN DEFAULT true,
+                    approved_by BIGINT,
+                    approved_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Initialize default settings
+            await self._initialize_default_settings()
+            
+            # Initialize cache with approved Telegram services
+            await self._initialize_approved_services()
+            
+        except Exception as e:
+            logger.error(f"Error creating service tables: {e}")
+            raise
+    
+    async def _initialize_default_settings(self):
+        """Initialize default service settings"""
+        try:
+            default_settings = [
+                ("global_services_enabled", "true", "Enable/disable all JAP services globally"),
+                ("default_user_access", "full", "Default access level for new users (full/limited/restricted)"),
+                ("auto_sync_jap_services", "true", "Automatically sync services from JAP API"),
+                ("service_cache_duration", "300", "Service cache duration in seconds"),
+                ("max_services_per_user", "100", "Maximum number of services visible to each user"),
+                ("enable_service_filtering", "true", "Enable service filtering by type and platform"),
+                ("restricted_service_types", "[]", "Service types that are restricted by default"),
+                ("restricted_platforms", "[]", "Platforms that are restricted by default"),
+                ("default_markup_percentage", "20.0", "Default markup percentage for services"),
+                ("coins_per_usd", "10000", "Conversion rate: coins per USD"),
+                ("min_markup_usd", "0.01", "Minimum markup in USD"),
+                ("max_markup_usd", "10.00", "Maximum markup in USD"),
+                ("enable_custom_pricing", "true", "Enable custom pricing for services"),
+                ("auto_update_pricing", "true", "Automatically update pricing when JAP prices change")
+            ]
+            
+            for key, value, description in default_settings:
+                await self._set_setting(key, value, description)
+                
+        except Exception as e:
+            logger.error(f"Error initializing default settings: {e}")
+    
+    async def _initialize_approved_services(self):
+        """Initialize cache with approved Telegram services"""
+        try:
+            # Check if cache is already initialized
+            existing_count = await db_manager.fetchval("SELECT COUNT(*) FROM cached_services")
+            if existing_count > 0:
+                logger.info(f"Cache already initialized with {existing_count} services")
+                return
+            
+            logger.info("Skipping JAP service initialization - services are disabled by default")
+            logger.info("💡 Use /enable_jap command (admin only) to enable JAP services when needed")
+            return
+            
+            # NOTE: JAP service fetching is now disabled by default
+            # The following code is commented out to prevent automatic JAP fetching
+            # logger.info("Initializing cache with approved Telegram services...")
+            # 
+            # # Get all services from JAP
+            # all_jap_services = await jap_service.get_services()
+            
+            # Filter for approved Telegram services
+            approved_services = []
+            for service in all_jap_services:
+                service_id = str(service.get("service", ""))
+                if service_id in self.allowed_telegram_services:
+                    approved_services.append(service)
+            
+            # Insert approved services into cache
+            for service in approved_services:
+                service_name = service.get("name", "").lower()
+                platform = self._extract_platform_from_name(service_name)
+                service_type = self._extract_service_type_from_name(service_name)
+                
+                await db_manager.execute("""
+                    INSERT INTO cached_services (
+                        service_id, name, platform, service_type, rate, min_quantity, 
+                        max_quantity, dripfeed, refill, cancel, category, is_approved, 
+                        is_active, approved_by, approved_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                """, 
+                    int(service.get("service", 0)),
+                    service.get("name", ""),
+                    platform,
+                    service_type,
+                    float(service.get("rate", 0)),
+                    int(service.get("min", 0)),
+                    int(service.get("max", 0)),
+                    bool(service.get("dripfeed", False)),
+                    bool(service.get("refill", False)),
+                    bool(service.get("cancel", False)),
+                    service.get("category", ""),
+                    True,  # Pre-approved
+                    True,  # Active
+                    1,     # System admin
+                    "NOW()"  # Approved now
+                )
+            
+            logger.info(f"Initialized cache with {len(approved_services)} approved Telegram services")
+            
+        except Exception as e:
+            logger.error(f"Error initializing approved services: {e}")
+    
+    async def _set_setting(self, key: str, value: str, description: str = None):
+        """Set a service setting"""
+        try:
+            await db_manager.execute("""
+                INSERT INTO service_settings (setting_key, setting_value, description)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (setting_key) 
+                DO UPDATE SET 
+                    setting_value = EXCLUDED.setting_value,
+                    description = EXCLUDED.description,
+                    updated_at = CURRENT_TIMESTAMP
+            """, key, value, description or "")
+            
+        except Exception as e:
+            logger.error(f"Error setting service setting {key}: {e}")
+    
+    async def get_setting(self, key: str, default: str = None) -> str:
+        """Get a service setting"""
+        try:
+            result = await db_manager.fetchval("""
+                SELECT setting_value FROM service_settings 
+                WHERE setting_key = $1
+            """, key)
+            return result if result else default
+        except Exception as e:
+            logger.error(f"Error getting service setting {key}: {e}")
+            return default
+    
+    async def get_all_services(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """Get all available services from cache (approved services only)"""
+        try:
+            # Check if services are globally enabled
+            if not await self.get_setting("global_services_enabled", "true") == "true":
+                logger.info("Global services are disabled")
+                return []
+            
+            # Get approved services from cache
+            services = await self.get_approved_services()
+            
+            # Convert cached services to JAP-like format for compatibility
+            formatted_services = []
+            for service in services:
+                formatted_service = {
+                    "service": service["service_id"],
+                    "name": service["name"],
+                    "platform": service["platform"],
+                    "service_type": service["service_type"],
+                    "rate": str(service["rate"]),
+                    "min": str(service["min_quantity"]),
+                    "max": str(service["max_quantity"]),
+                    "dripfeed": service["dripfeed"],
+                    "refill": service["refill"],
+                    "cancel": service["cancel"],
+                    "category": service["category"]
+                }
+                formatted_services.append(formatted_service)
+            
+            if not include_inactive:
+                # Filter out services that are globally restricted
+                restricted_types = json.loads(await self.get_setting("restricted_service_types", "[]"))
+                restricted_platforms = json.loads(await self.get_setting("restricted_platforms", "[]"))
+                
+                formatted_services = [
+                    service for service in formatted_services
+                    if (service.get("service_type") not in restricted_types and
+                        service.get("platform") not in restricted_platforms)
+                ]
+            
+            logger.info(f"Retrieved {len(formatted_services)} approved services from cache")
+            return formatted_services
+            
+        except Exception as e:
+            logger.error(f"Error getting all services: {e}")
+            return []
+    
+    def _filter_services(self, services: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filter services based on admin configuration"""
+        filtered_services = []
+        
+        for service in services:
+            service_id = str(service.get("service", ""))
+            platform = service.get("platform", "").lower()
+            
+            # Skip disabled platforms
+            if platform in self.disabled_platforms:
+                logger.debug(f"Skipping {platform} service {service_id} - platform disabled")
+                continue
+            
+            # For Telegram services, only allow specific service IDs
+            if platform == "telegram":
+                if service_id in self.allowed_telegram_services:
+                    filtered_services.append(service)
+                    logger.debug(f"Allowed Telegram service {service_id}")
+                else:
+                    logger.debug(f"Skipping Telegram service {service_id} - not in allowed list")
+            else:
+                # For other platforms, allow all services (except disabled platforms)
+                filtered_services.append(service)
+                logger.debug(f"Allowed {platform} service {service_id}")
+        
+        logger.info(f"Filtered {len(services)} services down to {len(filtered_services)} allowed services")
+        return filtered_services
+    
+    def update_telegram_services(self, service_ids: List[str]):
+        """Update the list of allowed Telegram service IDs"""
+        self.allowed_telegram_services = set(service_ids)
+        logger.info(f"Updated allowed Telegram services: {self.allowed_telegram_services}")
+    
+    def update_disabled_platforms(self, platforms: List[str]):
+        """Update the list of disabled platforms"""
+        self.disabled_platforms = set(platform.lower() for platform in platforms)
+        logger.info(f"Updated disabled platforms: {self.disabled_platforms}")
+    
+    async def add_service_by_code(self, service_id: int, admin_user_id: int) -> Dict[str, Any]:
+        """Add a new service by JAP service code"""
+        try:
+            # First, check if service already exists in cache
+            existing = await db_manager.fetchrow(
+                "SELECT * FROM cached_services WHERE service_id = $1", service_id
             )
-            active_users = active_users_result.scalar() or 0
+            if existing:
+                return {"success": False, "error": "Service already exists in cache"}
             
-            # New users today
-            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            new_users_result = await db.execute(
-                select(func.count(User.id))
-                .where(User.created_at >= today)
+            # Get service details from JAP
+            all_jap_services = await jap_service.get_services()
+            jap_service_data = None
+            
+            for service in all_jap_services:
+                if str(service.get("service", "")) == str(service_id):
+                    jap_service_data = service
+                    break
+            
+            if not jap_service_data:
+                return {"success": False, "error": f"Service {service_id} not found in JAP"}
+            
+            # Extract platform and service type
+            service_name = jap_service_data.get("name", "").lower()
+            platform = self._extract_platform_from_name(service_name)
+            service_type = self._extract_service_type_from_name(service_name)
+            
+            # Insert into cached services (not approved yet)
+            await db_manager.execute("""
+                INSERT INTO cached_services (
+                    service_id, name, platform, service_type, rate, min_quantity, 
+                    max_quantity, dripfeed, refill, cancel, category, is_approved, 
+                    is_active, approved_by, approved_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            """, 
+                service_id,
+                jap_service_data.get("name", ""),
+                platform,
+                service_type,
+                float(jap_service_data.get("rate", 0)),
+                int(jap_service_data.get("min", 0)),
+                int(jap_service_data.get("max", 0)),
+                bool(jap_service_data.get("dripfeed", False)),
+                bool(jap_service_data.get("refill", False)),
+                bool(jap_service_data.get("cancel", False)),
+                jap_service_data.get("category", ""),
+                False,  # Not approved yet
+                True,   # Active
+                None,   # Not approved by anyone yet
+                None    # Not approved yet
             )
-            new_users_today = new_users_result.scalar() or 0
             
-            # Financial stats
-            total_deposits = await BalanceService.get_total_deposits(db)
-            
-            # Total balance in system
-            total_balance_result = await db.execute(select(func.sum(Balance.coins)))
-            total_balance_coins = total_balance_result.scalar() or 0.0
-            
-            # Order stats
-            total_orders_result = await db.execute(select(func.count(Order.id)))
-            total_orders = total_orders_result.scalar() or 0
-            
-            completed_orders_result = await db.execute(
-                select(func.count(Order.id))
-                .where(Order.status == OrderStatus.COMPLETED)
-            )
-            completed_orders = completed_orders_result.scalar() or 0
-            
-            # Revenue from orders
-            revenue_result = await db.execute(
-                select(func.sum(Order.charge))
-                .where(Order.status.in_([OrderStatus.COMPLETED, OrderStatus.PARTIAL]))
-            )
-            total_revenue_coins = revenue_result.scalar() or 0.0
-            
-            # Referral stats
-            referral_stats = await ReferralService.get_referral_rewards_summary(db)
-            
-            # Service stats
-            service_stats = await ServiceService.get_services_stats(db)
-            
+            logger.info(f"Added service {service_id} to cache (pending approval)")
             return {
-                "users": {
-                    "total": total_users,
-                    "active_week": active_users,
-                    "new_today": new_users_today,
-                    "growth_rate": round((new_users_today / max(total_users - new_users_today, 1)) * 100, 2)
-                },
-                "financial": {
-                    "total_deposits_usd": total_deposits,
-                    "total_deposits_coins": BalanceService.usd_to_coins(total_deposits),
-                    "total_balance_coins": total_balance_coins,
-                    "total_balance_usd": BalanceService.coins_to_usd(total_balance_coins),
-                    "total_revenue_coins": total_revenue_coins,
-                    "total_revenue_usd": BalanceService.coins_to_usd(total_revenue_coins)
-                },
-                "orders": {
-                    "total": total_orders,
-                    "completed": completed_orders,
-                    "completion_rate": round((completed_orders / max(total_orders, 1)) * 100, 2)
-                },
-                "referrals": referral_stats,
-                "services": service_stats
+                "success": True, 
+                "message": f"Service {service_id} added successfully. Awaiting admin approval.",
+                "service": {
+                    "id": service_id,
+                    "name": jap_service_data.get("name", ""),
+                    "platform": platform,
+                    "service_type": service_type,
+                    "rate": float(jap_service_data.get("rate", 0))
+                }
             }
             
         except Exception as e:
-            logger.error(f"Error getting dashboard stats: {e}")
-            return {}
+            logger.error(f"Error adding service by code: {e}")
+            return {"success": False, "error": str(e)}
     
-    @staticmethod
-    async def get_users_list(
-        db: AsyncSession,
-        page: int = 1,
-        per_page: int = 20,
-        search: Optional[str] = None,
-        sort_by: str = "created_at",
-        sort_order: str = "desc"
-    ) -> Tuple[List[User], int]:
-        """Get paginated users list"""
+    async def approve_service(self, service_id: int, admin_user_id: int) -> bool:
+        """Approve a cached service"""
         try:
-            offset = (page - 1) * per_page
+            result = await db_manager.execute("""
+                UPDATE cached_services 
+                SET is_approved = true, approved_by = $1, approved_at = CURRENT_TIMESTAMP
+                WHERE service_id = $2
+            """, admin_user_id, service_id)
             
-            # Build query
-            query = select(User).options(selectinload(User.balance))
-            
-            # Add search filter
-            if search:
-                search_pattern = f"%{search}%"
-                query = query.where(
-                    or_(
-                        User.username.ilike(search_pattern),
-                        User.first_name.ilike(search_pattern),
-                        User.last_name.ilike(search_pattern),
-                        User.telegram_id.like(search_pattern)
-                    )
-                )
-            
-            # Add sorting
-            sort_column = getattr(User, sort_by, User.created_at)
-            if sort_order == "desc":
-                query = query.order_by(desc(sort_column))
-            else:
-                query = query.order_by(sort_column)
-            
-            # Get total count
-            count_query = select(func.count(User.id))
-            if search:
-                count_query = count_query.where(
-                    or_(
-                        User.username.ilike(search_pattern),
-                        User.first_name.ilike(search_pattern),
-                        User.last_name.ilike(search_pattern),
-                        User.telegram_id.like(search_pattern)
-                    )
-                )
-            
-            total_result = await db.execute(count_query)
-            total_count = total_result.scalar() or 0
-            
-            # Get users
-            query = query.offset(offset).limit(per_page)
-            result = await db.execute(query)
-            users = result.scalars().all()
-            
-            return users, total_count
-            
-        except Exception as e:
-            logger.error(f"Error getting users list: {e}")
-            return [], 0
-    
-    @staticmethod
-    async def get_user_details(db: AsyncSession, user_id: int) -> Optional[Dict[str, Any]]:
-        """Get detailed user information"""
-        try:
-            # Get user
-            user_result = await db.execute(
-                select(User)
-                .options(selectinload(User.balance))
-                .where(User.id == user_id)
-            )
-            user = user_result.scalar_one_or_none()
-            
-            if not user:
-                return None
-            
-            # Get user statistics
-            stats = await AdminService._get_user_statistics(db, user_id)
-            
-            # Get recent transactions
-            transactions = await BalanceService.get_user_transactions(db, user_id, limit=10)
-            
-            # Get recent orders
-            orders = await OrderService.get_user_orders(db, user_id, limit=10)
-            
-            # Get referral info
-            referral_stats = await ReferralService.get_user_referral_stats(db, user_id)
-            
-            return {
-                "user": user,
-                "stats": stats,
-                "transactions": transactions,
-                "orders": orders,
-                "referrals": referral_stats
-            }
-            
-        except Exception as e:
-            logger.error(f"Error getting user details {user_id}: {e}")
-            return None
-    
-    @staticmethod
-    async def _get_user_statistics(db: AsyncSession, user_id: int) -> Dict[str, Any]:
-        """Get user statistics"""
-        try:
-            # Total deposits
-            deposits_result = await db.execute(
-                select(func.sum(Transaction.usd_amount))
-                .where(
-                    and_(
-                        Transaction.user_id == user_id,
-                        Transaction.type == TransactionType.DEPOSIT,
-                        Transaction.status == TransactionStatus.COMPLETED
-                    )
-                )
-            )
-            total_deposits = deposits_result.scalar() or 0.0
-            
-            # Total orders
-            orders_result = await db.execute(
-                select(func.count(Order.id))
-                .where(Order.user_id == user_id)
-            )
-            total_orders = orders_result.scalar() or 0
-            
-            # Total spent on orders
-            spent_result = await db.execute(
-                select(func.sum(Order.charge))
-                .where(Order.user_id == user_id)
-            )
-            total_spent = spent_result.scalar() or 0.0
-            
-            return {
-                "total_deposits_usd": total_deposits,
-                "total_orders": total_orders,
-                "total_spent_coins": total_spent,
-                "total_spent_usd": BalanceService.coins_to_usd(total_spent)
-            }
-            
-        except Exception as e:
-            logger.error(f"Error getting user statistics {user_id}: {e}")
-            return {}
-    
-    @staticmethod
-    async def adjust_user_balance(
-        db: AsyncSession,
-        user_id: int,
-        amount: float,
-        reason: str,
-        admin_id: int
-    ) -> bool:
-        """Adjust user balance (admin operation)"""
-        try:
-            if amount > 0:
-                # Add balance
-                transaction = await BalanceService.add_balance(
-                    db=db,
-                    user_id=user_id,
-                    amount=amount,
-                    transaction_type=TransactionType.ADMIN_ADJUSTMENT,
-                    description=f"Admin adjustment: {reason}",
-                    metadata={"admin_id": admin_id, "reason": reason}
-                )
-            else:
-                # Deduct balance
-                transaction = await BalanceService.deduct_balance(
-                    db=db,
-                    user_id=user_id,
-                    amount=abs(amount),
-                    transaction_type=TransactionType.ADMIN_ADJUSTMENT,
-                    description=f"Admin adjustment: {reason}",
-                    metadata={"admin_id": admin_id, "reason": reason}
-                )
-            
-            if transaction:
-                logger.info(f"Admin {admin_id} adjusted user {user_id} balance by {amount} coins: {reason}")
-                return True
-            
-            return False
-            
-        except Exception as e:
-            logger.error(f"Error adjusting user balance: {e}")
-            return False
-    
-    @staticmethod
-    async def get_transactions_list(
-        db: AsyncSession,
-        page: int = 1,
-        per_page: int = 50,
-        transaction_type: Optional[TransactionType] = None,
-        status: Optional[TransactionStatus] = None
-    ) -> Tuple[List[Transaction], int]:
-        """Get paginated transactions list"""
-        try:
-            offset = (page - 1) * per_page
-            
-            # Build query
-            query = select(Transaction).options(selectinload(Transaction.user))
-            
-            # Add filters
-            if transaction_type:
-                query = query.where(Transaction.type == transaction_type)
-            if status:
-                query = query.where(Transaction.status == status)
-            
-            # Get total count
-            count_query = select(func.count(Transaction.id))
-            if transaction_type:
-                count_query = count_query.where(Transaction.type == transaction_type)
-            if status:
-                count_query = count_query.where(Transaction.status == status)
-            
-            total_result = await db.execute(count_query)
-            total_count = total_result.scalar() or 0
-            
-            # Get transactions
-            query = query.order_by(desc(Transaction.created_at)).offset(offset).limit(per_page)
-            result = await db.execute(query)
-            transactions = result.scalars().all()
-            
-            return transactions, total_count
-            
-        except Exception as e:
-            logger.error(f"Error getting transactions list: {e}")
-            return [], 0
-    
-    @staticmethod
-    async def get_orders_list(
-        db: AsyncSession,
-        page: int = 1,
-        per_page: int = 50,
-        status: Optional[OrderStatus] = None,
-        service_id: Optional[int] = None
-    ) -> Tuple[List[Order], int]:
-        """Get paginated orders list"""
-        try:
-            offset = (page - 1) * per_page
-            
-            # Build query
-            query = select(Order).options(
-                selectinload(Order.user),
-                selectinload(Order.service).selectinload(Service.category)
-            )
-            
-            # Add filters
-            if status:
-                query = query.where(Order.status == status)
-            if service_id:
-                query = query.where(Order.service_id == service_id)
-            
-            # Get total count
-            count_query = select(func.count(Order.id))
-            if status:
-                count_query = count_query.where(Order.status == status)
-            if service_id:
-                count_query = count_query.where(Order.service_id == service_id)
-            
-            total_result = await db.execute(count_query)
-            total_count = total_result.scalar() or 0
-            
-            # Get orders
-            query = query.order_by(desc(Order.created_at)).offset(offset).limit(per_page)
-            result = await db.execute(query)
-            orders = result.scalars().all()
-            
-            return orders, total_count
-            
-        except Exception as e:
-            logger.error(f"Error getting orders list: {e}")
-            return [], 0
-    
-    @staticmethod
-    async def get_setting(db: AsyncSession, key: str) -> Optional[str]:
-        """Get setting value"""
-        try:
-            result = await db.execute(
-                select(Setting.value).where(Setting.key == key)
-            )
-            return result.scalar()
-        except Exception as e:
-            logger.error(f"Error getting setting {key}: {e}")
-            return None
-    
-    @staticmethod
-    async def set_setting(
-        db: AsyncSession,
-        key: str,
-        value: str,
-        description: Optional[str] = None
-    ) -> bool:
-        """Set setting value"""
-        try:
-            # Check if setting exists
-            result = await db.execute(
-                select(Setting).where(Setting.key == key)
-            )
-            setting = result.scalar_one_or_none()
-            
-            if setting:
-                # Update existing
-                setting.value = value
-                if description:
-                    setting.description = description
-            else:
-                # Create new
-                setting = Setting(
-                    key=key,
-                    value=value,
-                    description=description
-                )
-                db.add(setting)
-            
-            await db.commit()
-            logger.info(f"Updated setting {key} = {value}")
+            logger.info(f"Service {service_id} approved by admin {admin_user_id}")
             return True
             
         except Exception as e:
-            await db.rollback()
-            logger.error(f"Error setting {key}: {e}")
+            logger.error(f"Error approving service: {e}")
             return False
     
-    @staticmethod
-    async def get_analytics_data(
-        db: AsyncSession,
-        days: int = 30
-    ) -> Dict[str, Any]:
-        """Get analytics data for specified period"""
+    async def get_pending_services(self) -> List[Dict[str, Any]]:
+        """Get services pending approval"""
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            services = await db_manager.fetch("""
+                SELECT * FROM cached_services 
+                WHERE is_approved = false AND is_active = true
+                ORDER BY created_at DESC
+            """)
+            return [dict(service) for service in services]
+        except Exception as e:
+            logger.error(f"Error getting pending services: {e}")
+            return []
+    
+    async def get_approved_services(self, platform: str = None) -> List[Dict[str, Any]]:
+        """Get approved services from cache"""
+        try:
+            if platform:
+                services = await db_manager.fetch("""
+                    SELECT * FROM cached_services 
+                    WHERE is_approved = true AND is_active = true AND platform = $1
+                    ORDER BY platform, service_type, name
+                """, platform)
+            else:
+                services = await db_manager.fetch("""
+                    SELECT * FROM cached_services 
+                    WHERE is_approved = true AND is_active = true
+                    ORDER BY platform, service_type, name
+                """)
+            return [dict(service) for service in services]
+        except Exception as e:
+            logger.error(f"Error getting approved services: {e}")
+            return []
+    
+    def _extract_platform_from_name(self, service_name: str) -> str:
+        """Extract platform from service name"""
+        platforms = [
+            "instagram", "youtube", "tiktok", "twitter", "facebook", 
+            "telegram", "linkedin", "snapchat", "pinterest", "reddit",
+            "twitch", "discord", "spotify", "apple", "google", "amazon"
+        ]
+        
+        for platform in platforms:
+            if platform in service_name:
+                return platform
+        
+        return "other"
+    
+    def _extract_service_type_from_name(self, service_name: str) -> str:
+        """Extract service type from service name"""
+        service_types = [
+            "followers", "likes", "views", "comments", "shares",
+            "subscribers", "watches", "plays", "downloads", "reviews",
+            "ratings", "votes", "clicks", "impressions", "engagement"
+        ]
+        
+        for service_type in service_types:
+            if service_type in service_name:
+                return service_type
+        
+        return "other"
+    
+    async def get_services_for_user(self, user_id: int, platform: str = None, 
+                                   service_type: str = None) -> List[Dict[str, Any]]:
+        """Get services available for a specific user"""
+        try:
+            # Get user's access level
+            user_access = await self._get_user_access_level(user_id)
             
-            # Daily user registrations
-            registrations_result = await db.execute(
-                select(
-                    func.date(User.created_at).label('date'),
-                    func.count(User.id).label('count')
-                )
-                .where(User.created_at >= start_date)
-                .group_by(func.date(User.created_at))
-                .order_by(func.date(User.created_at))
-            )
-            registrations = [{"date": str(row.date), "count": row.count} for row in registrations_result]
+            if user_access == "restricted":
+                return []
             
-            # Daily deposits
-            deposits_result = await db.execute(
-                select(
-                    func.date(Transaction.created_at).label('date'),
-                    func.sum(Transaction.usd_amount).label('amount')
-                )
-                .where(
-                    and_(
-                        Transaction.created_at >= start_date,
-                        Transaction.type == TransactionType.DEPOSIT,
-                        Transaction.status == TransactionStatus.COMPLETED
-                    )
-                )
-                .group_by(func.date(Transaction.created_at))
-                .order_by(func.date(Transaction.created_at))
-            )
-            deposits = [{"date": str(row.date), "amount": float(row.amount or 0)} for row in deposits_result]
+            # Get all available services
+            all_services = await self.get_all_services()
             
-            # Daily orders
-            orders_result = await db.execute(
-                select(
-                    func.date(Order.created_at).label('date'),
-                    func.count(Order.id).label('count'),
-                    func.sum(Order.charge).label('revenue')
-                )
-                .where(Order.created_at >= start_date)
-                .group_by(func.date(Order.created_at))
-                .order_by(func.date(Order.created_at))
-            )
-            orders = [
-                {
-                    "date": str(row.date),
-                    "count": row.count,
-                    "revenue_coins": float(row.revenue or 0),
-                    "revenue_usd": BalanceService.coins_to_usd(float(row.revenue or 0))
+            # Apply user-specific restrictions
+            user_restrictions = await self._get_user_service_restrictions(user_id)
+            
+            filtered_services = []
+            for service in all_services:
+                service_id = service.get("id")
+                service_platform = service.get("platform")
+                service_type_name = service.get("service_type")
+                
+                # Check if service is restricted for this user
+                if service_id in user_restrictions.get("blocked_services", []):
+                    continue
+                
+                # Check platform and type filters
+                if platform and service_platform != platform:
+                    continue
+                if service_type and service_type_name != service_type:
+                    continue
+                
+                # Check if user has access to this service type/platform
+                if not await self._check_user_service_access(user_id, service_id, service_type_name, service_platform):
+                    continue
+                
+                # Add pricing information for users
+                pricing_info = await self.get_service_pricing(service_id, for_admin=False)
+                if pricing_info:
+                    service["pricing"] = pricing_info
+                
+                filtered_services.append(service)
+            
+            # Limit services per user
+            max_services = int(await self.get_setting("max_services_per_user", "100"))
+            if len(filtered_services) > max_services:
+                filtered_services = filtered_services[:max_services]
+            
+            return filtered_services
+            
+        except Exception as e:
+            logger.error(f"Error getting services for user {user_id}: {e}")
+            return []
+    
+    async def _get_user_access_level(self, user_id: int) -> str:
+        """Get user's service access level"""
+        try:
+            # Check for specific user restrictions
+            result = await db_manager.fetchrow("""
+                SELECT access_level FROM service_access_control 
+                WHERE user_id = $1 AND service_id IS NULL 
+                AND service_type IS NULL AND platform IS NULL
+                LIMIT 1
+            """, user_id)
+            
+            if result:
+                return result["access_level"]
+            
+            # Return default access level
+            return await self.get_setting("default_user_access", "full")
+            
+        except Exception as e:
+            logger.error(f"Error getting user access level: {e}")
+            return "full"
+    
+    async def _get_user_service_restrictions(self, user_id: int) -> Dict[str, Any]:
+        """Get user's service restrictions"""
+        try:
+            restrictions = {
+                "blocked_services": [],
+                "blocked_types": [],
+                "blocked_platforms": []
+            }
+            
+            # Get blocked services
+            blocked_services = await db_manager.fetch("""
+                SELECT service_id FROM service_access_control 
+                WHERE user_id = $1 AND is_active = false AND service_id IS NOT NULL
+            """, user_id)
+            
+            restrictions["blocked_services"] = [row["service_id"] for row in blocked_services]
+            
+            # Get blocked service types
+            blocked_types = await db_manager.fetch("""
+                SELECT service_type FROM service_access_control 
+                WHERE user_id = $1 AND is_active = false AND service_type IS NOT NULL
+            """, user_id)
+            
+            restrictions["blocked_types"] = [row["service_type"] for row in blocked_types]
+            
+            # Get blocked platforms
+            blocked_platforms = await db_manager.fetch("""
+                SELECT platform FROM service_access_control 
+                WHERE user_id = $1 AND is_active = false AND platform IS NOT NULL
+            """, user_id)
+            
+            restrictions["blocked_platforms"] = [row["platform"] for row in blocked_platforms]
+            
+            return restrictions
+            
+        except Exception as e:
+            logger.error(f"Error getting user service restrictions: {e}")
+            return {"blocked_services": [], "blocked_types": [], "blocked_platforms": []}
+    
+    async def _check_user_service_access(self, user_id: int, service_id: int, 
+                                       service_type: str, platform: str) -> bool:
+        """Check if user has access to a specific service"""
+        try:
+            # Check service-specific access
+            result = await db_manager.fetchrow("""
+                SELECT is_active FROM service_access_control 
+                WHERE user_id = $1 AND service_id = $2
+            """, user_id, service_id)
+            
+            if result:
+                return result["is_active"]
+            
+            # Check service type access
+            result = await db_manager.fetchrow("""
+                SELECT is_active FROM service_access_control 
+                WHERE user_id = $1 AND service_type = $2 AND platform = $3
+            """, user_id, service_type, platform)
+            
+            if result:
+                return result["is_active"]
+            
+            # Check platform access
+            result = await db_manager.fetchrow("""
+                SELECT is_active FROM service_access_control 
+                WHERE user_id = $1 AND platform = $2 AND service_type IS NULL
+            """, user_id, platform)
+            
+            if result:
+                return result["is_active"]
+            
+            # Default: allow access
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking user service access: {e}")
+            return True
+    
+    # Admin Management Methods
+    
+    async def set_service_availability(self, service_id: int, is_active: bool, 
+                                     user_id: Optional[int] = None) -> bool:
+        """Set service availability for all users or specific user"""
+        try:
+            if user_id:
+                # User-specific setting
+                await db_manager.execute("""
+                    INSERT INTO service_access_control (user_id, service_id, is_active)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (user_id, service_id) 
+                    DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = CURRENT_TIMESTAMP
+                """, user_id, service_id, is_active)
+            else:
+                # Global setting - apply to all users
+                await db_manager.execute("""
+                    INSERT INTO service_access_control (user_id, service_id, is_active)
+                    SELECT u.id, $1, $2
+                    FROM users u
+                    ON CONFLICT (user_id, service_id) 
+                    DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = CURRENT_TIMESTAMP
+                """, service_id, is_active)
+            
+            # Clear cache
+            self._clear_cache()
+            
+            logger.info(f"Service {service_id} availability set to {is_active} for {'user ' + str(user_id) if user_id else 'all users'}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error setting service availability: {e}")
+            return False
+    
+    async def set_service_type_availability(self, service_type: str, platform: str, 
+                                          is_active: bool, user_id: Optional[int] = None) -> bool:
+        """Set service type availability for all users or specific user"""
+        try:
+            if user_id:
+                # User-specific setting
+                await db_manager.execute("""
+                    INSERT INTO service_access_control (user_id, service_type, platform, is_active)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (user_id, service_type, platform) 
+                    DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = CURRENT_TIMESTAMP
+                """, user_id, service_type, platform, is_active)
+            else:
+                # Global setting - apply to all users
+                await db_manager.execute("""
+                    INSERT INTO service_access_control (user_id, service_type, platform, is_active)
+                    SELECT u.id, $1, $2, $3
+                    FROM users u
+                    ON CONFLICT (user_id, service_type, platform) 
+                    DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = CURRENT_TIMESTAMP
+                """, service_type, platform, is_active)
+            
+            # Clear cache
+            self._clear_cache()
+            
+            logger.info(f"Service type {service_type} on {platform} availability set to {is_active} for {'user ' + str(user_id) if user_id else 'all users'}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error setting service type availability: {e}")
+            return False
+    
+    async def set_platform_availability(self, platform: str, is_active: bool, 
+                                      user_id: Optional[int] = None) -> bool:
+        """Set platform availability for all users or specific user"""
+        try:
+            if user_id:
+                # User-specific setting
+                await db_manager.execute("""
+                    INSERT INTO service_access_control (user_id, platform, is_active)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (user_id, platform) 
+                    DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = CURRENT_TIMESTAMP
+                """, user_id, platform, is_active)
+            else:
+                # Global setting - apply to all users
+                await db_manager.execute("""
+                    INSERT INTO service_access_control (user_id, platform, is_active)
+                    SELECT u.id, $1, $2
+                    FROM users u
+                    ON CONFLICT (user_id, platform) 
+                    DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = CURRENT_TIMESTAMP
+                """, platform, is_active)
+            
+            # Clear cache
+            self._clear_cache()
+            
+            logger.info(f"Platform {platform} availability set to {is_active} for {'user ' + str(user_id) if user_id else 'all users'}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error setting platform availability: {e}")
+            return False
+    
+    async def set_user_access_level(self, user_id: int, access_level: str) -> bool:
+        """Set user's overall service access level"""
+        try:
+            await db_manager.execute("""
+                INSERT INTO service_access_control (user_id, access_level)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id) 
+                DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = CURRENT_TIMESTAMP
+            """, user_id, access_level)
+            
+            # Clear cache
+            self._clear_cache()
+            
+            logger.info(f"User {user_id} access level set to {access_level}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error setting user access level: {e}")
+            return False
+    
+    async def get_service_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive service statistics for admin dashboard"""
+        try:
+            stats = {}
+            
+            # Total services
+            all_services = await self.get_all_services(include_inactive=True)
+            stats["total_services"] = len(all_services)
+            
+            # Services by platform
+            platforms = {}
+            for service in all_services:
+                platform = service.get("platform", "other")
+                if platform not in platforms:
+                    platforms[platform] = 0
+                platforms[platform] += 1
+            stats["services_by_platform"] = platforms
+            
+            # Services by type
+            service_types = {}
+            for service in all_services:
+                service_type = service.get("service_type", "other")
+                if service_type not in service_types:
+                    service_types[service_type] = 0
+                service_types[service_type] += 1
+            stats["services_by_type"] = service_types
+            
+            # Active services
+            active_services = await self.get_all_services(include_inactive=False)
+            stats["active_services"] = len(active_services)
+            
+            # User access statistics
+            user_stats = await db_manager.fetchrow("""
+                SELECT 
+                    COUNT(DISTINCT user_id) as total_users,
+                    COUNT(CASE WHEN access_level = 'full' THEN 1 END) as full_access_users,
+                    COUNT(CASE WHEN access_level = 'limited' THEN 1 END) as limited_access_users,
+                    COUNT(CASE WHEN access_level = 'restricted' THEN 1 END) as restricted_users
+                FROM service_access_control 
+                WHERE service_id IS NULL AND service_type IS NULL AND platform IS NULL
+            """)
+            
+            if user_stats:
+                stats["user_access_stats"] = dict(user_stats)
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error getting service statistics: {e}")
+            return {}
+
+    # Pricing Management Methods
+    
+    async def set_service_price(self, service_id: int, custom_price_usd: float, 
+                               markup_percentage: float = None) -> bool:
+        """Set custom price for a specific service"""
+        try:
+            # Get JAP price for this service
+            all_services = await jap_service.get_services()
+            jap_service_data = None
+            for service in all_services:
+                if service.get("id") == service_id:
+                    jap_service_data = service
+                    break
+            
+            if not jap_service_data:
+                logger.error(f"Service {service_id} not found in JAP")
+                return False
+            
+            jap_price_usd = jap_service_data.get("rate", 0)
+            platform = jap_service_data.get("platform", "other")
+            service_type = jap_service_data.get("service_type", "other")
+            
+            # Calculate markup if not provided
+            if markup_percentage is None:
+                default_markup = float(await self.get_setting("default_markup_percentage", "20.0"))
+                markup_percentage = default_markup
+            
+            # Calculate custom price in coins
+            coins_per_usd = int(await self.get_setting("coins_per_usd", "10000"))
+            custom_price_coins = int(custom_price_usd * coins_per_usd)
+            
+            # Insert or update pricing
+            await db_manager.execute("""
+                INSERT INTO service_pricing (
+                    service_id, platform, service_type, jap_price_usd, 
+                    custom_price_usd, custom_price_coins, markup_percentage
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (service_id) 
+                DO UPDATE SET 
+                    custom_price_usd = EXCLUDED.custom_price_usd,
+                    custom_price_coins = EXCLUDED.custom_price_coins,
+                    markup_percentage = EXCLUDED.markup_percentage,
+                    updated_at = CURRENT_TIMESTAMP
+            """, service_id, platform, service_type, jap_price_usd, 
+                 custom_price_usd, custom_price_coins, markup_percentage)
+            
+            # Clear price cache
+            self.price_cache.clear()
+            
+            logger.info(f"Service {service_id} price set to ${custom_price_usd} (markup: {markup_percentage}%)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error setting service price: {e}")
+            return False
+    
+    async def get_service_pricing(self, service_id: int, for_admin: bool = False) -> Dict[str, Any]:
+        """Get pricing information for a service"""
+        try:
+            # Get custom pricing from database
+            pricing_result = await db_manager.fetchrow("""
+                SELECT * FROM service_pricing WHERE service_id = $1
+            """, service_id)
+            
+            # Get JAP service data
+            all_services = await jap_service.get_services()
+            jap_service_data = None
+            for service in all_services:
+                if service.get("id") == service_id:
+                    jap_service_data = service
+                    break
+            
+            if not jap_service_data:
+                return {}
+            
+            jap_price_usd = jap_service_data.get("rate", 0)
+            platform = jap_service_data.get("platform", "other")
+            service_type = jap_service_data.get("service_type", "other")
+            
+            # Get conversion rate
+            coins_per_usd = int(await self.get_setting("coins_per_usd", "10000"))
+            
+            if pricing_result:
+                # Custom pricing exists
+                custom_price_usd = float(pricing_result["custom_price_usd"])
+                custom_price_coins = int(pricing_result["custom_price_coins"])
+                markup_percentage = float(pricing_result["markup_percentage"])
+                
+                pricing_info = {
+                    "service_id": service_id,
+                    "platform": platform,
+                    "service_type": service_type,
+                    "jap_price_usd": jap_price_usd,
+                    "custom_price_usd": custom_price_usd,
+                    "custom_price_coins": custom_price_coins,
+                    "markup_percentage": markup_percentage,
+                    "price_difference_usd": custom_price_usd - jap_price_usd,
+                    "price_difference_percentage": ((custom_price_usd - jap_price_usd) / jap_price_usd * 100) if jap_price_usd > 0 else 0
                 }
-                for row in orders_result
-            ]
+                
+                if for_admin:
+                    # Show both JAP and custom prices to admin
+                    pricing_info["display_price_usd"] = custom_price_usd
+                    pricing_info["display_price_coins"] = custom_price_coins
+                    pricing_info["show_jap_price"] = True
+                else:
+                    # Show only custom price to users
+                    pricing_info["display_price_usd"] = custom_price_usd
+                    pricing_info["display_price_coins"] = custom_price_coins
+                    pricing_info["show_jap_price"] = False
+                
+                return pricing_info
+            else:
+                # No custom pricing, use JAP price
+                default_markup = float(await self.get_setting("default_markup_percentage", "20.0"))
+                custom_price_usd = jap_price_usd * (1 + default_markup / 100)
+                custom_price_coins = int(custom_price_usd * coins_per_usd)
+                
+                pricing_info = {
+                    "service_id": service_id,
+                    "platform": platform,
+                    "service_type": service_type,
+                    "jap_price_usd": jap_price_usd,
+                    "custom_price_usd": custom_price_usd,
+                    "custom_price_coins": custom_price_coins,
+                    "markup_percentage": default_markup,
+                    "price_difference_usd": custom_price_usd - jap_price_usd,
+                    "price_difference_percentage": default_markup,
+                    "is_default_pricing": True
+                }
+                
+                if for_admin:
+                    pricing_info["display_price_usd"] = custom_price_usd
+                    pricing_info["display_price_coins"] = custom_price_coins
+                    pricing_info["show_jap_price"] = True
+                else:
+                    pricing_info["display_price_usd"] = custom_price_usd
+                    pricing_info["display_price_coins"] = custom_price_coins
+                    pricing_info["show_jap_price"] = False
+                
+                return pricing_info
+                
+        except Exception as e:
+            logger.error(f"Error getting service pricing: {e}")
+            return {}
+    
+    async def calculate_order_price(self, service_id: int, quantity: int) -> Dict[str, Any]:
+        """Calculate order price using custom pricing"""
+        try:
+            pricing_info = await self.get_service_pricing(service_id, for_admin=False)
+            
+            if not pricing_info:
+                return {"success": False, "message": "Service pricing not found"}
+            
+            custom_price_usd = pricing_info.get("custom_price_usd", 0)
+            custom_price_coins = pricing_info.get("custom_price_coins", 0)
+            
+            if custom_price_usd <= 0:
+                return {"success": False, "message": "Invalid service price"}
+            
+            # Calculate total price
+            total_price_usd = (custom_price_usd * quantity) / 1000  # JAP prices are per 1000
+            total_price_coins = int(total_price_usd * int(await self.get_setting("coins_per_usd", "10000")))
             
             return {
-                "period_days": days,
-                "registrations": registrations,
-                "deposits": deposits,
-                "orders": orders
+                "success": True,
+                "service_id": service_id,
+                "quantity": quantity,
+                "price_per_1000_usd": custom_price_usd,
+                "price_per_1000_coins": custom_price_coins,
+                "total_price_usd": total_price_usd,
+                "total_price_coins": total_price_coins,
+                "pricing_type": "custom" if pricing_info.get("custom_price_usd") != pricing_info.get("jap_price_usd") else "default"
             }
             
         except Exception as e:
-            logger.error(f"Error getting analytics data: {e}")
-            return {}
+            logger.error(f"Error calculating order price: {e}")
+            return {"success": False, "message": str(e)}
     
-    @staticmethod
-    async def export_users_csv(db: AsyncSession) -> str:
-        """Export users to CSV format"""
+    async def bulk_update_pricing(self, platform: str = None, service_type: str = None, 
+                                 markup_percentage: float = None) -> Dict[str, Any]:
+        """Bulk update pricing for multiple services"""
         try:
-            users, _ = await AdminService.get_users_list(db, page=1, per_page=10000)
+            if markup_percentage is None:
+                markup_percentage = float(await self.get_setting("default_markup_percentage", "20.0"))
             
-            csv_lines = ["ID,Telegram ID,Username,First Name,Last Name,Language,Balance,Created At,Last Activity"]
+            # Get services to update
+            all_services = await jap_service.get_services()
+            services_to_update = []
             
-            for user in users:
-                balance = user.balance.coins if user.balance else 0
-                csv_lines.append(
-                    f"{user.id},{user.telegram_id},{user.username or ''},"
-                    f"{user.first_name or ''},{user.last_name or ''},{user.language.value},"
-                    f"{balance},{user.created_at},{user.last_activity}"
-                )
+            for service in all_services:
+                if platform and service.get("platform") != platform:
+                    continue
+                if service_type and service.get("service_type") != service_type:
+                    continue
+                services_to_update.append(service)
             
-            return "\n".join(csv_lines)
+            if not services_to_update:
+                return {"success": False, "message": "No services found for update"}
+            
+            # Update pricing for each service
+            updated_count = 0
+            failed_count = 0
+            
+            for service in services_to_update:
+                service_id = service.get("id")
+                jap_price_usd = service.get("rate", 0)
+                
+                if jap_price_usd > 0:
+                    custom_price_usd = jap_price_usd * (1 + markup_percentage / 100)
+                    success = await self.set_service_price(service_id, custom_price_usd, markup_percentage)
+                    
+                    if success:
+                        updated_count += 1
+                    else:
+                        failed_count += 1
+            
+            return {
+                "success": True,
+                "updated_count": updated_count,
+                "failed_count": failed_count,
+                "total_services": len(services_to_update),
+                "markup_percentage": markup_percentage
+            }
             
         except Exception as e:
-            logger.error(f"Error exporting users CSV: {e}")
-            return ""
+            logger.error(f"Error in bulk pricing update: {e}")
+            return {"success": False, "message": str(e)}
+    
+    async def get_pricing_statistics(self) -> Dict[str, Any]:
+        """Get pricing statistics for admin dashboard"""
+        try:
+            stats = {}
+            
+            # Get all pricing records
+            pricing_records = await db_manager.fetchrow("""
+                SELECT 
+                    COUNT(*) as total_priced_services,
+                    COUNT(CASE WHEN custom_price_usd > jap_price_usd THEN 1 END) as markup_services,
+                    COUNT(CASE WHEN custom_price_usd < jap_price_usd THEN 1 END) as discount_services,
+                    COUNT(CASE WHEN custom_price_usd = jap_price_usd THEN 1 END) as same_price_services,
+                    AVG(markup_percentage) as avg_markup_percentage,
+                    MIN(markup_percentage) as min_markup_percentage,
+                    MAX(markup_percentage) as max_markup_percentage
+                FROM service_pricing
+            """)
+            
+            if pricing_records:
+                stats["pricing"] = dict(pricing_records[0])
+            
+            # Get pricing by platform
+            platform_pricing = await db_manager.fetch("""
+                SELECT 
+                    platform,
+                    COUNT(*) as service_count,
+                    AVG(markup_percentage) as avg_markup
+                FROM service_pricing 
+                GROUP BY platform
+            """)
+            
+            stats["platform_pricing"] = [dict(record) for record in platform_pricing]
+            
+            # Get pricing by service type
+            type_pricing = await db_manager.fetch("""
+                SELECT 
+                    service_type,
+                    COUNT(*) as service_count,
+                    AVG(markup_percentage) as avg_markup
+                FROM service_pricing 
+                GROUP BY service_type
+            """)
+            
+            stats["type_pricing"] = [dict(record) for record in type_pricing]
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error getting pricing statistics: {e}")
+            return {}
+    
+    def _clear_cache(self):
+        """Clear service cache"""
+        self.service_settings_cache.clear()
+        self.user_access_cache.clear()
+        self.price_cache.clear()
+    
+    async def close(self):
+        """Close the admin service manager"""
+        try:
+            self._clear_cache()
+            logger.info("Admin service manager closed")
+        except Exception as e:
+            logger.error(f"Error closing admin service manager: {e}")
+
+
+# Global admin service manager instance
+admin_service_manager = AdminServiceManager()

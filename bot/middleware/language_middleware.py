@@ -37,19 +37,19 @@ class LanguageMiddleware(BaseMiddleware):
         language = Language.ENGLISH  # Default language
         
         try:
-            db = await get_db_session()
-            async with db:
-                user = await UserService.get_user_by_telegram_id(db, user_id)
-                if user and user.language:
-                    language = Language(user.language.value)
+            user = await UserService.get_user_by_telegram_id(user_id)
+            if user and user.get('language'):
+                language = user['language']
+                logger.debug(f"User {user_id} language set to {language.value} from database")
+            else:
+                logger.debug(f"User {user_id} has no language set, using default: {language.value}")
             
             # Add language to data context for handlers
             data["user_language"] = language
             
-            logger.debug(f"User {user_id} language set to {language.value}")
-            
         except Exception as e:
             logger.error(f"Error getting user language: {e}")
+            # Keep default language on error
         
         # Continue processing
         return await handler(event, data)

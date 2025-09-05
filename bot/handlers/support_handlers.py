@@ -105,3 +105,8 @@ async def handle_support_faq(callback: CallbackQuery, user_language: Language = 
     except Exception as e:
         logger.error(f"Error in support FAQ: {e}")
         await callback.answer("❌ Error loading FAQ", show_alert=True)
+
+
+def setup(dispatcher):
+    """Setup support handlers"""
+    dispatcher.include_router(router)

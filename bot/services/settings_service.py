@@ -42,6 +42,7 @@ class SettingsService:
         # Service Settings
         "auto_sync_services": {"value": "true", "type": "bool", "description": "Auto sync services from JAP API"},
         "service_sync_interval": {"value": "3600", "type": "int", "description": "Service sync interval in seconds"},
+        "jap_services_enabled": {"value": "false", "type": "bool", "description": "Enable JAP service fetching and display (admin must enable this)"},
         
         # Bot Settings
         "maintenance_mode": {"value": "false", "type": "bool", "description": "Enable maintenance mode"},
@@ -169,22 +170,22 @@ class SettingsService:
             return False
     
     @staticmethod
-    async def get_all_settings(db: AsyncSession) -> Dict[str, Dict[str, Any]]:
+    async def get_all_settings(db) -> Dict[str, Dict[str, Any]]:
         """Get all settings with metadata"""
         try:
-            result = await db.execute(select(Setting))
-            settings_db = result.scalars().all()
+            # Use raw SQL query for asyncpg connection
+            settings_db = await db.fetch("SELECT key, value, description FROM settings")
             
             settings_dict = {}
             
             # Add settings from database
             for setting in settings_db:
-                config = SettingsService.DEFAULT_SETTINGS.get(setting.key, {"type": "str"})
-                settings_dict[setting.key] = {
-                    "value": setting.value,
+                config = SettingsService.DEFAULT_SETTINGS.get(setting['key'], {"type": "str"})
+                settings_dict[setting['key']] = {
+                    "value": setting['value'],
                     "type": config["type"],
-                    "description": setting.description or config.get("description", ""),
-                    "category": SettingsService._get_setting_category(setting.key)
+                    "description": setting['description'] or config.get("description", ""),
+                    "category": SettingsService._get_setting_category(setting['key'])
                 }
             
             # Add missing default settings
@@ -226,7 +227,7 @@ class SettingsService:
             return "⚙️ Other"
     
     @staticmethod
-    async def get_settings_by_category(db: AsyncSession) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    async def get_settings_by_category(db) -> Dict[str, Dict[str, Dict[str, Any]]]:
         """Get settings organized by category"""
         try:
             all_settings = await SettingsService.get_all_settings(db)

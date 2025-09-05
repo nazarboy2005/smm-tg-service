@@ -157,29 +157,9 @@ async def main():
         except Exception as e:
             logger.warning(f"Failed to initialize default settings: {e}")
         
-        # Test JAP API connection (optional)
-        try:
-            from bot.services.service_service import ServiceService
-            logger.info("Testing JAP API connection...")
-            
-            # Test balance fetch
-            balance_info = await ServiceService.get_jap_balance()
-            if balance_info:
-                balance = balance_info.get("balance", "0")
-                currency = balance_info.get("currency", "USD")
-                logger.info(f"✅ JAP API connected - Balance: {balance} {currency}")
-            else:
-                logger.warning("⚠️ JAP API not configured or connection failed (this is normal)")
-            
-            # Test service fetch
-            services = await ServiceService.get_services_from_jap()
-            if services:
-                logger.info(f"✅ JAP API services available - {len(services)} services found")
-            else:
-                logger.warning("⚠️ No services available from JAP API (this is normal if not configured)")
-                
-        except Exception as e:
-            logger.warning(f"JAP API test failed (this is normal if not configured): {e}")
+        # Skip JAP API testing during startup - services are disabled by default
+        logger.info("⚠️ JAP API testing skipped - services are disabled by default")
+        logger.info("💡 Use /enable_jap command (admin only) to enable JAP services when needed")
         
         # Set bot and dispatcher for webhook handling (for web interface)
         from bot.web.server import set_bot_and_dispatcher

@@ -77,7 +77,27 @@ class BasePaymentProvider(ABC):
     @abstractmethod
     def get_provider_name(self) -> str:
         """Get provider name"""
-        pass
+        return self.__class__.__name__.lower().replace('provider', '')
+    
+    def get_display_name(self) -> str:
+        """Get display name for the provider"""
+        provider_names = {
+            'telegram_payments': '💳 Telegram Payments',
+            'payme': '💳 Payme',
+            'click': '💳 Click',
+            'manual': '📞 Manual Payment'
+        }
+        return provider_names.get(self.get_provider_name(), self.get_provider_name().title())
+    
+    def get_description(self) -> str:
+        """Get description for the provider"""
+        descriptions = {
+            'telegram_payments': 'Secure payments via Telegram',
+            'payme': 'Uzbek payment system',
+            'click': 'Uzbek payment system',
+            'manual': 'Contact admin for payment'
+        }
+        return descriptions.get(self.get_provider_name(), 'Payment provider')
     
     def format_amount(self, amount_usd: float) -> int:
         """Format amount for provider (usually in cents)"""

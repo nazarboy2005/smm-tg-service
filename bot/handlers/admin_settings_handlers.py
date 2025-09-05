@@ -95,12 +95,15 @@ def create_setting_edit_keyboard(key: str, language: Language):
 async def handle_admin_settings(callback: CallbackQuery):
     """Handle admin settings menu"""
     try:
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                
-                # Get settings by category
+        from bot.database.db import db_manager
+        
+        user = await UserService.get_user_by_telegram_id(callback.from_user.id)
+        if user:
+            language = user["language"]
+            
+            # Get settings by category using raw asyncpg connection
+            db = await db_manager.get_connection()
+            try:
                 categories = await SettingsService.get_settings_by_category(db)
                 
                 text = f"⚙️ {get_text('settings_admin', language)}\n\n"
@@ -110,7 +113,8 @@ async def handle_admin_settings(callback: CallbackQuery):
                     text,
                     reply_markup=create_settings_keyboard(categories, language)
                 )
-            break
+            finally:
+                await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error in admin settings: {e}")
         await callback.answer("❌ Error")
@@ -120,12 +124,15 @@ async def handle_admin_settings(callback: CallbackQuery):
 async def handle_settings_category(callback: CallbackQuery):
     """Handle settings category selection"""
     try:
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                
-                # Get all categories to find the selected one
+        from bot.database.db import db_manager
+        
+        user = await UserService.get_user_by_telegram_id(callback.from_user.id)
+        if user:
+            language = user["language"]
+            
+            # Get all categories to find the selected one using raw asyncpg connection
+            db = await db_manager.get_connection()
+            try:
                 categories = await SettingsService.get_settings_by_category(db)
                 
                 # Find category by hash (simple approach)
@@ -150,7 +157,8 @@ async def handle_settings_category(callback: CallbackQuery):
                     )
                 else:
                     await callback.answer(f"❌ {get_text('error', language)}")
-            break
+            finally:
+                await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error in settings category: {e}")
         await callback.answer("❌ Error")
@@ -160,14 +168,17 @@ async def handle_settings_category(callback: CallbackQuery):
 async def handle_setting_view(callback: CallbackQuery):
     """Handle viewing a specific setting"""
     try:
+        from bot.database.db import db_manager
+        
         setting_key = callback.data.replace("setting_", "")
         
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
-            if user:
-                language = Language(user.language.value)
-                
-                # Get setting details
+        user = await UserService.get_user_by_telegram_id(callback.from_user.id)
+        if user:
+            language = user["language"]
+            
+            # Get setting details using raw asyncpg connection
+            db = await db_manager.get_connection()
+            try:
                 all_settings = await SettingsService.get_all_settings(db)
                 setting_data = all_settings.get(setting_key)
                 
@@ -184,7 +195,8 @@ async def handle_setting_view(callback: CallbackQuery):
                     )
                 else:
                     await callback.answer(f"❌ {get_text('error', language)}")
-            break
+            finally:
+                await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error viewing setting: {e}")
         await callback.answer("❌ Error")
@@ -196,10 +208,12 @@ async def handle_setting_edit(callback: CallbackQuery, state: FSMContext):
     try:
         setting_key = callback.data.replace("edit_", "")
         
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+        from bot.database.db import db_manager
+        db = await db_manager.get_connection()
+        try:
+            user = await UserService.get_user_by_telegram_id(callback.from_user.id)
             if user:
-                language = Language(user.language.value)
+                language = user["language"]
                 
                 # Get setting details
                 all_settings = await SettingsService.get_all_settings(db)
@@ -222,7 +236,8 @@ async def handle_setting_edit(callback: CallbackQuery, state: FSMContext):
                     )
                 else:
                     await callback.answer(f"❌ {get_text('error', language)}")
-            break
+        finally:
+            await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error editing setting: {e}")
         await callback.answer("❌ Error")
@@ -237,14 +252,19 @@ async def handle_setting_value_input(message: Message, state: FSMContext):
         new_value = message.text.strip()
         
         if not setting_key:
+            # Get user language for error message
+            user = await UserService.get_user_by_telegram_id(message.from_user.id)
+            language = user.get("language", Language.ENGLISH) if user else Language.ENGLISH
             await message.answer(get_text("setting_key_not_found", language))
             await state.clear()
             return
         
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
+        from bot.database.db import db_manager
+        db = await db_manager.get_connection()
+        try:
+            user = await UserService.get_user_by_telegram_id(message.from_user.id)
             if user:
-                language = Language(user.language.value)
+                language = user["language"]
                 
                 # Validate the new value
                 is_valid, error_msg = await SettingsService.validate_setting_value(setting_key, new_value)
@@ -254,7 +274,7 @@ async def handle_setting_value_input(message: Message, state: FSMContext):
                     return
                 
                 # Set the new value
-                success = await SettingsService.set_setting(db, setting_key, new_value, user.id)
+                success = await SettingsService.set_setting(db, setting_key, new_value, user["id"])
                 
                 if success:
                     await message.answer(
@@ -264,9 +284,13 @@ async def handle_setting_value_input(message: Message, state: FSMContext):
                     await message.answer(get_text("error_updating_setting", language))
                 
                 await state.clear()
-            break
+        finally:
+            await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error handling setting value input: {e}")
+        # Get user language for error message
+        user = await UserService.get_user_by_telegram_id(message.from_user.id)
+        language = user.get("language", Language.ENGLISH) if user else Language.ENGLISH
         await message.answer(get_text("error_updating_setting", language))
         await state.clear()
 
@@ -277,13 +301,15 @@ async def handle_setting_reset(callback: CallbackQuery):
     try:
         setting_key = callback.data.replace("reset_", "")
         
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, callback.from_user.id)
+        from bot.database.db import db_manager
+        db = await db_manager.get_connection()
+        try:
+            user = await UserService.get_user_by_telegram_id(callback.from_user.id)
             if user:
-                language = Language(user.language.value)
+                language = user["language"]
                 
                 # Reset to default
-                success = await SettingsService.reset_setting_to_default(db, setting_key, user.id)
+                success = await SettingsService.reset_setting_to_default(db, setting_key, user["id"])
                 
                 if success:
                     # Get the new default value
@@ -297,7 +323,8 @@ async def handle_setting_reset(callback: CallbackQuery):
                     )
                 else:
                     await callback.answer("❌ Failed to reset setting")
-            break
+        finally:
+            await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error resetting setting: {e}")
         await callback.answer("❌ Error")
@@ -307,9 +334,11 @@ async def handle_setting_reset(callback: CallbackQuery):
 async def cmd_config(message: Message):
     """Show current configuration"""
     try:
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
-            if user and user.is_admin:
+        from bot.database.db import db_manager
+        db = await db_manager.get_connection()
+        try:
+            user = await UserService.get_user_by_telegram_id(message.from_user.id)
+            if user and user["is_admin"]:
                 # Get financial settings (most important ones)
                 financial = await SettingsService.get_current_financial_settings(db)
                 
@@ -335,7 +364,8 @@ async def cmd_config(message: Message):
                 text += "\nUse /admin → Settings to modify these values."
                 
                 await message.answer(text)
-            break
+        finally:
+            await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error in config command: {e}")
         await message.answer(get_text("error_getting_configuration", language))
@@ -345,9 +375,11 @@ async def cmd_config(message: Message):
 async def cmd_export_settings(message: Message):
     """Export all settings as JSON"""
     try:
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
-            if user and user.is_admin:
+        from bot.database.db import db_manager
+        db = await db_manager.get_connection()
+        try:
+            user = await UserService.get_user_by_telegram_id(message.from_user.id)
+            if user and user["is_admin"]:
                 settings_json = await SettingsService.export_settings(db)
                 
                 # Send as file
@@ -362,7 +394,8 @@ async def cmd_export_settings(message: Message):
                     filename=filename,
                     caption="📁 Bot Settings Export"
                 )
-            break
+        finally:
+            await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error exporting settings: {e}")
         await message.answer(get_text("error_exporting_settings", language))
@@ -391,9 +424,11 @@ async def cmd_quick_config(message: Message):
         setting_key = args[0]
         new_value = " ".join(args[1:])
         
-        async for db in get_db():
-            user = await UserService.get_user_by_telegram_id(db, message.from_user.id)
-            if user and user.is_admin:
+        from bot.database.db import db_manager
+        db = await db_manager.get_connection()
+        try:
+            user = await UserService.get_user_by_telegram_id(message.from_user.id)
+            if user and user["is_admin"]:
                 # Validate and set
                 is_valid, error_msg = await SettingsService.validate_setting_value(setting_key, new_value)
                 
@@ -401,7 +436,7 @@ async def cmd_quick_config(message: Message):
                     await message.answer(f"{get_text('invalid_value', language)}: {error_msg}")
                     return
                 
-                success = await SettingsService.set_setting(db, setting_key, new_value, user.id)
+                success = await SettingsService.set_setting(db, setting_key, new_value, user["id"])
                 
                 if success:
                     await message.answer(
@@ -409,7 +444,13 @@ async def cmd_quick_config(message: Message):
                     )
                 else:
                     await message.answer("❌ Failed to update setting")
-            break
+        finally:
+            await db_manager.pool.release(db)
     except Exception as e:
         logger.error(f"Error in quick config: {e}")
         await message.answer(get_text("error_updating_setting", language))
+
+
+def setup(dispatcher):
+    """Setup admin settings handlers"""
+    dispatcher.include_router(router)

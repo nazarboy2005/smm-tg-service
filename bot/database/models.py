@@ -161,7 +161,7 @@ class Service(Base):
     name = Column(String(500), nullable=False, index=True)
     description = Column(Text, nullable=True)
     service_type = Column(String(100), nullable=True)  # JAP service type (Default, Custom Comments, etc.)
-    price_per_1000 = Column(Float, nullable=False)  # Price in coins per 1000 units
+    price_per_1000 = Column(Float, nullable=False)  # Price in coins per 1000 members
     jap_rate_usd = Column(Float, nullable=True)  # Original JAP rate in USD
     min_quantity = Column(Integer, default=100, nullable=False)
     max_quantity = Column(Integer, default=100000, nullable=False)
@@ -199,7 +199,8 @@ class Order(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    service_id = Column(Integer, ForeignKey("services.id"), nullable=False)
+    service_id = Column(Integer, ForeignKey("services.id"), nullable=True)  # Legacy service reference
+    curated_service_id = Column(Integer, ForeignKey("admin_curated_services.id"), nullable=True)  # New curated service reference
     jap_order_id = Column(Integer, nullable=True, unique=True, index=True)  # JAP API order ID
     jap_service_id = Column(Integer, nullable=False, index=True)  # Direct JAP service ID for reference
     
@@ -229,6 +230,7 @@ class Order(Base):
     # Relationships
     user = relationship("User", back_populates="orders")
     service = relationship("Service", back_populates="orders")
+    curated_service = relationship("AdminCuratedService", back_populates="orders")
     
     # Indexes
     __table_args__ = (
@@ -312,3 +314,42 @@ class ReferralButtonTap(Base):
     
     def __repr__(self):
         return f"<ReferralButtonTap(user_id={self.user_id}, button_type={self.button_type})>"
+
+
+class AdminCuratedService(Base):
+    __tablename__ = "admin_curated_services"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    jap_service_id = Column(Integer, nullable=False, unique=True, index=True)  # JAP API service ID
+    
+    # Admin-customized fields
+    custom_name = Column(String(500), nullable=False)  # Custom name set by admin
+    custom_description = Column(Text, nullable=True)  # Custom description set by admin
+    custom_price_per_1000 = Column(Float, nullable=False)  # Custom price in coins per 1000 members
+    
+    # Platform and category info (extracted from JAP)
+    platform = Column(String(100), nullable=True)  # e.g., instagram, youtube, tiktok
+    service_type = Column(String(100), nullable=True)  # e.g., followers, likes, views
+    
+    # Status and ordering
+    is_active = Column(Boolean, default=True, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+    
+    # Admin tracking
+    added_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    added_by_admin = relationship("User")
+    orders = relationship("Order", back_populates="curated_service")
+    
+    # Indexes
+    __table_args__ = (
+        Index('ix_admin_curated_services_jap_id', 'jap_service_id'),
+        Index('ix_admin_curated_services_platform', 'platform'),
+        Index('ix_admin_curated_services_active', 'is_active'),
+    )
+    
+    def __repr__(self):
+        return f"<AdminCuratedService(jap_service_id={self.jap_service_id}, custom_name={self.custom_name}, price={self.custom_price_per_1000})>"

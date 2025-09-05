@@ -9,35 +9,6 @@ from loguru import logger
 router = Router()
 
 
-@router.message(Command("start"))
-async def cmd_start(message: Message):
-    """Simple start command without database"""
-    try:
-        logger.info(f"Start command from user {message.from_user.id}")
-        
-        welcome_text = f"🎉 <b>Welcome to SMM Services Bot!</b>\n\n"
-        welcome_text += f"👋 Hello, {message.from_user.first_name or 'User'}!\n\n"
-        welcome_text += f"🌟 <b>Premium Social Media Marketing Services</b>\n\n"
-        welcome_text += f"📊 <b>What we offer:</b>\n"
-        welcome_text += f"• Instagram Followers & Likes\n"
-        welcome_text += f"• YouTube Views & Subscribers\n"
-        welcome_text += f"• TikTok Followers & Views\n"
-        welcome_text += f"• Twitter Followers & Retweets\n"
-        welcome_text += f"• And much more!\n\n"
-        welcome_text += f"💰 <b>Features:</b>\n"
-        welcome_text += f"• Instant delivery\n"
-        welcome_text += f"• 24/7 support\n"
-        welcome_text += f"• Secure payments\n"
-        welcome_text += f"• Money-back guarantee\n\n"
-        welcome_text += f"💡 <i>Bot is working correctly!</i>"
-        
-        await message.answer(welcome_text)
-        
-    except Exception as e:
-        logger.error(f"Error in start command: {e}")
-        await message.answer("❌ An error occurred. Please try again.")
-
-
 @router.message(Command("ping"))
 async def cmd_ping(message: Message):
     """Simple ping command"""
@@ -93,3 +64,8 @@ async def cmd_help(message: Message):
 #         await message.answer(f"📝 You said: {message.text}")
 #     except Exception as e:
 #         logger.error(f"Error in echo handler: {e}")
+
+
+def setup(dispatcher):
+    """Setup simple handlers"""
+    dispatcher.include_router(router)

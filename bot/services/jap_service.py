@@ -1,339 +1,222 @@
 """
-JAP API integration service for SMM services
+JAP (Just Another Panel) API Service
+Integrates with JAP to fetch real services and manage orders
 """
 import aiohttp
 import asyncio
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Optional, Any
 from loguru import logger
-
 from bot.config import settings
 
 
 class JAPService:
-    """Service for JAP API integration"""
+    """Service for interacting with Just Another Panel (JAP) API"""
     
     def __init__(self):
         self.api_url = "https://justanotherpanel.com/api/v2"
-        self.api_key = settings.jap_api_key
-        self.session = None
+        self.api_key = getattr(settings, 'jap_api_key', None)
+        self.session: Optional[aiohttp.ClientSession] = None
+        
+        if not self.api_key:
+            logger.warning("JAP API key not configured - JAP services will be unavailable")
     
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session"""
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=30)
-            )
-        return self.session
-    
-    async def close(self):
-        """Close HTTP session"""
-        if self.session and not self.session.closed:
-            await self.session.close()
-    
-    async def _make_request(
-        self,
-        data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Make HTTP request to JAP API"""
+    async def _make_request(self, action: str, **params) -> Dict[str, Any]:
+        """Make a request to the JAP API"""
+        if not self.api_key:
+            logger.warning("JAP API key not configured")
+            return {"error": "JAP API key not configured"}
+        
         try:
-            session = await self._get_session()
+            if not self.session:
+                self.session = aiohttp.ClientSession()
             
-            # Add API key to data
-            data["key"] = self.api_key
+            # Prepare request parameters
+            request_params = {
+                "key": self.api_key,
+                "action": action,
+                **params
+            }
             
-            async with session.post(self.api_url, data=data) as response:
+            logger.debug(f"Making JAP API request: {action}")
+            
+            async with self.session.post(self.api_url, data=request_params) as response:
                 if response.status == 200:
                     result = await response.json()
+                    logger.debug(f"JAP API response: {result}")
                     return result
                 else:
-                    logger.error(f"JAP API request failed: {response.status} - {await response.text()}")
-                    return None
+                    logger.error(f"JAP API request failed with status {response.status}")
+                    return {"error": f"HTTP {response.status}"}
                     
         except Exception as e:
-            logger.error(f"JAP API request error: {e}")
-            return None
+            logger.error(f"Error making JAP API request: {e}")
+            return {"error": str(e)}
     
-    async def get_services(self) -> Optional[List[Dict[str, Any]]]:
-        """Get available services from JAP API"""
+    async def get_services(self) -> List[Dict[str, Any]]:
+        """Fetch all available services from JAP, extracts platform and service_type"""
         try:
-            data = {"action": "services"}
-            result = await self._make_request(data)
-            if result and isinstance(result, list):
-                logger.info(f"Retrieved {len(result)} services from JAP API")
-                return result
-            return None
+            if not self.api_key:
+                logger.warning("JAP API key not configured - returning empty services list")
+                return []
+
+            result = await self._make_request("services")
+
+            if "error" in result:
+                logger.error(f"Error fetching JAP services: {result['error']}")
+                return []
+
+            # JAP API returns a list directly, not a dict with 'services' key
+            if isinstance(result, list):
+                services = result
+            elif isinstance(result, dict):
+                services = result.get("services", [])
+            else:
+                logger.error(f"Unexpected result type from JAP API: {type(result)}")
+                return []
+
+            enhanced_services = []
+
+            for service in services:
+                # Extract platform and service type from service name
+                service_name = service.get("name", "").lower()
+                platform = self._extract_platform(service_name)
+                service_type = self._extract_service_type(service_name)
+
+                enhanced_service = {
+                    **service,
+                    "platform": platform,
+                    "service_type": service_type
+                }
+                enhanced_services.append(enhanced_service)
+
+            logger.info(f"Successfully fetched {len(enhanced_services)} services from JAP")
+            return enhanced_services
+
         except Exception as e:
-            logger.error(f"Error getting services from JAP API: {e}")
-            return None
+            logger.error(f"Error getting JAP services: {e}")
+            return []
     
-    async def get_service_by_id(self, service_id: int) -> Optional[Dict[str, Any]]:
-        """Get specific service by ID"""
+    def _extract_platform(self, service_name: str) -> str:
+        """Extract platform from service name (e.g., instagram, youtube)"""
+        platforms = [
+            "instagram", "youtube", "tiktok", "twitter", "facebook", 
+            "telegram", "linkedin", "snapchat", "pinterest", "reddit",
+            "twitch", "discord", "spotify", "apple", "google", "amazon"
+        ]
+        
+        for platform in platforms:
+            if platform in service_name:
+                return platform
+        
+        return "other"
+    
+    def _extract_service_type(self, service_name: str) -> str:
+        """Extract service type from service name (e.g., followers, likes)"""
+        service_types = [
+            "followers", "likes", "views", "comments", "shares",
+            "subscribers", "watches", "plays", "downloads", "reviews",
+            "ratings", "votes", "clicks", "impressions", "engagement"
+        ]
+        
+        for service_type in service_types:
+            if service_type in service_name:
+                return service_type
+        
+        return "other"
+    
+    async def get_services_by_platform(self, platform: str) -> List[Dict[str, Any]]:
+        """Get services filtered by platform"""
         try:
-            services = await self.get_services()
-            if services:
-                for service in services:
-                    if service.get("service") == service_id:
-                        return service
-            return None
+            all_services = await self.get_services()
+            return [service for service in all_services if service.get("platform") == platform]
         except Exception as e:
-            logger.error(f"Error getting service {service_id} from JAP API: {e}")
-            return None
+            logger.error(f"Error getting services by platform {platform}: {e}")
+            return []
     
-    async def create_order(
-        self,
-        service_id: int,
-        link: str,
-        quantity: int,
-        runs: Optional[int] = None,
-        interval: Optional[int] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Create order via JAP API"""
+    async def get_services_by_type(self, service_type: str) -> List[Dict[str, Any]]:
+        """Get services filtered by service type"""
         try:
-            data = {
-                "action": "add",
+            all_services = await self.get_services()
+            return [service for service in all_services if service.get("service_type") == service_type]
+        except Exception as e:
+            logger.error(f"Error getting services by type {service_type}: {e}")
+            return []
+    
+    async def add_order(self, service_id: int, link: str, quantity: int, 
+                        runs: Optional[int] = None, interval: Optional[int] = None) -> Dict[str, Any]:
+        """Add new order to JAP"""
+        try:
+            if not self.api_key:
+                return {"error": "JAP API key not configured"}
+            
+            params = {
                 "service": service_id,
                 "link": link,
                 "quantity": quantity
             }
             
-            # Add optional parameters
-            if runs is not None:
-                data["runs"] = runs
-            if interval is not None:
-                data["interval"] = interval
+            if runs:
+                params["runs"] = runs
+            if interval:
+                params["interval"] = interval
             
-            result = await self._make_request(data)
-            if result and "order" in result:
-                logger.info(f"Created JAP order: service {service_id}, quantity {quantity}, order_id {result.get('order')}")
+            result = await self._make_request("add", **params)
+            
+            if "error" in result:
+                logger.error(f"Error adding JAP order: {result['error']}")
                 return result
-            return None
+            
+            logger.info(f"Successfully added JAP order: {result}")
+            return result
             
         except Exception as e:
-            logger.error(f"Error creating JAP order: {e}")
-            return None
+            logger.error(f"Error adding JAP order: {e}")
+            return {"error": str(e)}
     
-    async def get_order_status(self, order_id: int) -> Optional[Dict[str, Any]]:
-        """Get order status from JAP API"""
+    async def get_order_status(self, order_id: int) -> Dict[str, Any]:
+        """Get order status from JAP"""
         try:
-            data = {
-                "action": "status",
-                "order": order_id
-            }
+            if not self.api_key:
+                return {"error": "JAP API key not configured"}
             
-            result = await self._make_request(data)
-            if result:
+            result = await self._make_request("status", order=order_id)
+            
+            if "error" in result:
+                logger.error(f"Error getting JAP order status: {result['error']}")
                 return result
-            return None
+            
+            return result
             
         except Exception as e:
-            logger.error(f"Error getting JAP order status {order_id}: {e}")
-            return None
+            logger.error(f"Error getting JAP order status: {e}")
+            return {"error": str(e)}
     
-    async def get_multiple_orders_status(self, order_ids: List[int]) -> Optional[Dict[str, Any]]:
-        """Get status of multiple orders"""
+    async def get_balance(self) -> Dict[str, Any]:
+        """Get JAP account balance"""
         try:
-            data = {
-                "action": "status",
-                "orders": ",".join(map(str, order_ids))
-            }
+            if not self.api_key:
+                return {"error": "JAP API key not configured"}
             
-            result = await self._make_request(data)
-            if result:
+            result = await self._make_request("balance")
+            
+            if "error" in result:
+                logger.error(f"Error getting JAP balance: {result['error']}")
                 return result
-            return None
             
-        except Exception as e:
-            logger.error(f"Error getting multiple JAP orders status: {e}")
-            return None
-    
-    async def create_refill(self, order_id: int) -> Optional[Dict[str, Any]]:
-        """Create refill for an order"""
-        try:
-            data = {
-                "action": "refill",
-                "order": order_id
-            }
-            
-            result = await self._make_request(data)
-            if result and "refill" in result:
-                logger.info(f"Created refill for order {order_id}: refill_id {result.get('refill')}")
-                return result
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error creating refill for order {order_id}: {e}")
-            return None
-    
-    async def create_multiple_refills(self, order_ids: List[int]) -> Optional[List[Dict[str, Any]]]:
-        """Create refills for multiple orders"""
-        try:
-            data = {
-                "action": "refill",
-                "orders": ",".join(map(str, order_ids))
-            }
-            
-            result = await self._make_request(data)
-            if result and isinstance(result, list):
-                logger.info(f"Created refills for {len(result)} orders")
-                return result
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error creating multiple refills: {e}")
-            return None
-    
-    async def get_refill_status(self, refill_id: int) -> Optional[Dict[str, Any]]:
-        """Get refill status"""
-        try:
-            data = {
-                "action": "refill_status",
-                "refill": refill_id
-            }
-            
-            result = await self._make_request(data)
-            if result:
-                return result
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error getting refill status {refill_id}: {e}")
-            return None
-    
-    async def get_multiple_refills_status(self, refill_ids: List[int]) -> Optional[List[Dict[str, Any]]]:
-        """Get status of multiple refills"""
-        try:
-            data = {
-                "action": "refill_status",
-                "refills": ",".join(map(str, refill_ids))
-            }
-            
-            result = await self._make_request(data)
-            if result and isinstance(result, list):
-                return result
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error getting multiple refills status: {e}")
-            return None
-    
-    async def cancel_orders(self, order_ids: List[int]) -> Optional[List[Dict[str, Any]]]:
-        """Cancel multiple orders"""
-        try:
-            data = {
-                "action": "cancel",
-                "orders": ",".join(map(str, order_ids))
-            }
-            
-            result = await self._make_request(data)
-            if result and isinstance(result, list):
-                logger.info(f"Cancelled {len(result)} orders")
-                return result
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error cancelling orders: {e}")
-            return None
-    
-    async def get_balance(self) -> Optional[float]:
-        """Get JAP API balance"""
-        try:
-            data = {"action": "balance"}
-            result = await self._make_request(data)
-            
-            if result and "balance" in result:
-                balance = float(result["balance"])
-                logger.info(f"JAP API balance: ${balance}")
-                return balance
-            return None
+            return result
             
         except Exception as e:
             logger.error(f"Error getting JAP balance: {e}")
-            return None
+            return {"error": str(e)}
     
-    def map_jap_status_to_local(self, jap_status: str) -> str:
-        """Map JAP API status to local order status"""
-        status_mapping = {
-            "Pending": "pending",
-            "In progress": "in_progress",
-            "Processing": "in_progress",
-            "Completed": "completed",
-            "Partial": "partial",
-            "Canceled": "cancelled",
-            "Error": "error"
-        }
-        return status_mapping.get(jap_status, "pending")
-    
-    def calculate_service_price(self, jap_service: Dict[str, Any], quantity: int) -> float:
-        """Calculate price for service and quantity in coins"""
+    async def close(self):
+        """Close HTTP session"""
         try:
-            # JAP API returns rate per 1000
-            rate_per_1000 = float(jap_service.get("rate", 0))
-            
-            # Convert to our coin system
-            # Assuming JAP rate is in USD, convert to coins
-            price_usd = (rate_per_1000 * quantity) / 1000
-            price_coins = price_usd * settings.coins_per_usd
-            
-            return round(price_coins, 2)
-            
+            if self.session:
+                await self.session.close()
+                self.session = None
         except Exception as e:
-            logger.error(f"Error calculating service price: {e}")
-            return 0.0
-    
-    def validate_service_link(self, service_type: str, link: str) -> bool:
-        """Validate social media link based on service type"""
-        try:
-            link = link.lower().strip()
-            
-            # Basic URL validation
-            if not link.startswith(('http://', 'https://')):
-                return False
-            
-            # Service-specific validation
-            if 'instagram' in service_type.lower():
-                return 'instagram.com' in link
-            elif 'facebook' in service_type.lower():
-                return 'facebook.com' in link or 'fb.com' in link
-            elif 'twitter' in service_type.lower() or 'x.com' in service_type.lower():
-                return 'twitter.com' in link or 'x.com' in link
-            elif 'youtube' in service_type.lower():
-                return 'youtube.com' in link or 'youtu.be' in link
-            elif 'tiktok' in service_type.lower():
-                return 'tiktok.com' in link
-            elif 'telegram' in service_type.lower():
-                return 't.me' in link or 'telegram.me' in link
-            
-            # If no specific validation, accept any valid URL
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error validating service link: {e}")
-            return False
-    
-    def get_service_category(self, service_name: str) -> str:
-        """Determine service category from service name"""
-        service_name = service_name.lower()
-        
-        if 'instagram' in service_name:
-            return 'Instagram'
-        elif 'facebook' in service_name:
-            return 'Facebook'
-        elif 'twitter' in service_name or 'x.com' in service_name:
-            return 'Twitter/X'
-        elif 'youtube' in service_name:
-            return 'YouTube'
-        elif 'tiktok' in service_name:
-            return 'TikTok'
-        elif 'telegram' in service_name:
-            return 'Telegram'
-        elif 'linkedin' in service_name:
-            return 'LinkedIn'
-        elif 'spotify' in service_name:
-            return 'Spotify'
-        elif 'soundcloud' in service_name:
-            return 'SoundCloud'
-        else:
-            return 'Other'
+            logger.error(f"Error closing JAP service session: {e}")
 
 
 # Global JAP service instance

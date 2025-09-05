@@ -2,7 +2,7 @@
 Configuration management for the SMM Bot
 """
 import os
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
 
@@ -31,6 +31,20 @@ class Settings(BaseSettings):
     jap_api_key: str = Field(default="", env="JAP_API_KEY")
     
     # Payment Configuration
+    # Telegram Payments (most reliable)
+    telegram_payments_token: str = Field(default="", env="TELEGRAM_PAYMENTS_TOKEN")
+    
+    # Uzbek Payment Providers (simplified)
+    payme_merchant_id: str = Field(default="", env="PAYME_MERCHANT_ID")
+    payme_secret_key: str = Field(default="", env="PAYME_SECRET_KEY")
+    click_merchant_id: str = Field(default="", env="CLICK_MERCHANT_ID")
+    click_service_id: str = Field(default="", env="CLICK_SERVICE_ID")
+    click_secret_key: str = Field(default="", env="CLICK_SECRET_KEY")
+    
+    # Admin contact for manual payments
+    admin_contact: str = Field(default="@admin", env="ADMIN_CONTACT")
+    
+    # Legacy payment providers (kept for compatibility)
     coingate_api_token: str = Field(default="", env="COINGATE_API_TOKEN")
     coingate_sandbox: bool = Field(default=True, env="COINGATE_SANDBOX")
     paypal_client_id: str = Field(default="", env="PAYPAL_CLIENT_ID")
@@ -44,12 +58,6 @@ class Settings(BaseSettings):
     xrp_address: str = Field(default="", env="XRP_ADDRESS")
     doge_address: str = Field(default="", env="DOGE_ADDRESS")
     toncoin_address: str = Field(default="", env="TONCOIN_ADDRESS")
-    
-    # Uzbek Payment Providers
-    payme_merchant_id: str = Field(default="", env="PAYME_MERCHANT_ID")
-    payme_secret_key: str = Field(default="", env="PAYME_SECRET_KEY")
-    click_merchant_id: str = Field(default="", env="CLICK_MERCHANT_ID")
-    click_secret_key: str = Field(default="", env="CLICK_SECRET_KEY")
     
     # Application Settings
     coins_per_usd: int = Field(default=10000, env="COINS_PER_USD")
@@ -89,13 +97,10 @@ class Settings(BaseSettings):
     def validate_database_url(cls, v: str) -> str:
         """Validate and modify database URL for pgbouncer compatibility"""
         if v and 'postgresql' in v:
-            # Add pgbouncer compatibility parameters if not present
-            if 'statement_cache_size=0' not in v:
-                separator = '&' if '?' in v else '?'
-                v += f"{separator}statement_cache_size=0"
-            if 'prepared_statement_cache_size=0' not in v:
-                separator = '&' if '?' in v else '?'
-                v += f"{separator}prepared_statement_cache_size=0"
+            # For raw asyncpg connections, we don't need to add +asyncpg
+            # The URL should be in format: postgresql://user:pass@host:port/db
+            if not v.startswith('postgresql://'):
+                raise ValueError("Database URL must start with 'postgresql://'")
         return v
     
     def __init__(self, **kwargs):
@@ -158,34 +163,6 @@ class Settings(BaseSettings):
             except (ValueError, TypeError):
                 return 1.0
         return float(v) if v is not None else 1.0
-    
-    @field_validator('database_url', mode='after')
-    @classmethod
-    def validate_database_url(cls, v):
-        """Ensure database URL uses async driver and is completely pgbouncer compatible"""
-        if v.startswith('postgresql://'):
-            # Convert to async PostgreSQL URL
-            v = v.replace('postgresql://', 'postgresql+asyncpg://', 1)
-            
-            # Add ALL necessary parameters for complete pgbouncer compatibility
-            # These parameters completely disable prepared statement functionality
-            cache_params = [
-                'statement_cache_size=0',           # Disable statement caching
-                'prepared_statement_cache_size=0',   # Disable prepared statement caching
-                'command_timeout=60'                 # Set reasonable timeout
-            ]
-            
-            if '?' not in v:
-                v += '?' + '&'.join(cache_params)
-            else:
-                # Check if parameters already exist to avoid duplicates
-                existing_params = v.split('?')[1] if '?' in v else ''
-                for param in cache_params:
-                    param_name = param.split('=')[0]
-                    if param_name not in existing_params:
-                        v += '&' + param
-        
-        return v
 
 
 # Global settings instance
