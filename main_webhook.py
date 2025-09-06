@@ -216,12 +216,35 @@ async def main():
         )
         webhook_requests_handler.register(app, path="/webhook")
         
-        # Setup web interface - we'll handle this differently
-        # The web interface will be available through the FastAPI app
-        # For now, we'll just add a simple redirect to the web interface
+        # Setup web interface routes
         async def web_redirect(request):
             return web.Response(
-                text='<html><body><h1>Elite JAP Bot</h1><p>Web interface is being loaded...</p><script>setTimeout(() => window.location.reload(), 2000);</script></body></html>',
+                text='''
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Elite JAP Bot</title>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f7fa; }
+                        .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                        .btn { background: #0088cc; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }
+                        .status { color: #10b981; font-weight: bold; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>🚀 Elite JAP Bot</h1>
+                        <p class="status">✅ Bot is running successfully!</p>
+                        <p>Welcome to the premium SMM services platform</p>
+                        <p>Please start the bot to access your dashboard:</p>
+                        <a href="https://t.me/nimadirishqiladiganbot" class="btn">Start Bot</a>
+                        <p><small>After starting the bot, you'll be able to access this dashboard</small></p>
+                    </div>
+                </body>
+                </html>
+                ''',
                 content_type='text/html'
             )
         
