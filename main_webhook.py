@@ -52,7 +52,11 @@ async def shutdown():
         
         # Close bot session
         if bot:
-            await bot.session.close()
+            try:
+                await bot.session.close()
+                logger.info("Bot session closed")
+            except Exception as e:
+                logger.warning(f"Error closing bot session: {e}")
         
         logger.info("Bot shutdown completed")
         
@@ -149,12 +153,9 @@ async def setup_bot():
         try:
             from bot.services.settings_service import SettingsService
             from bot.database.db import db_manager
-            db = await db_manager.get_connection()
-            try:
+            async with db_manager.get_connection() as db:
                 await SettingsService.initialize_default_settings(db)
                 logger.info("Default settings initialized")
-            finally:
-                await db_manager.pool.release(db)
         except Exception as e:
             logger.warning(f"Failed to initialize default settings: {e}")
         
@@ -187,8 +188,13 @@ async def main():
         # Get Railway URL
         railway_url = os.environ.get("RAILWAY_STATIC_URL")
         if not railway_url:
-            logger.error("RAILWAY_STATIC_URL environment variable not set")
-            return
+            # Try to get from other possible environment variables
+            railway_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("WEB_BASE_URL")
+            if not railway_url:
+                logger.warning("RAILWAY_STATIC_URL environment variable not set")
+                logger.info("Bot will start without webhook (development mode)")
+                # Continue without webhook for development
+                railway_url = "http://localhost:8000"
         
         webhook_url = f"{railway_url}/webhook"
         logger.info(f"Setting webhook URL: {webhook_url}")
@@ -202,8 +208,9 @@ async def main():
             )
             logger.info("Webhook set successfully")
         except Exception as e:
-            logger.error(f"Failed to set webhook: {e}")
-            return
+            logger.warning(f"Failed to set webhook: {e}")
+            logger.info("Continuing without webhook (development mode)")
+            # Continue without webhook for development
         
         # Create aiohttp app
         app = web.Application()

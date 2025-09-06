@@ -432,8 +432,14 @@ class DatabaseManager:
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)")
             
             # Create indexes for services table
-            await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_category ON services(category)")
-            await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_is_active ON services(is_active)")
+            try:
+                await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_category ON services(category)")
+            except Exception as e:
+                logger.warning(f"Could not create category index: {e}")
+            try:
+                await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_is_active ON services(is_active)")
+            except Exception as e:
+                logger.warning(f"Could not create is_active index: {e}")
             
             # Create indexes for orders table
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
