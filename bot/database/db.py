@@ -308,123 +308,146 @@ class DatabaseManager:
     
     async def _create_tables_if_not_exist(self, conn):
         """Create tables if they don't exist"""
-        # Create users table
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                telegram_id BIGINT UNIQUE NOT NULL,
-                username VARCHAR(255),
-                first_name VARCHAR(255),
-                last_name VARCHAR(255),
-                language VARCHAR(10) DEFAULT 'en' NOT NULL,
-                is_admin BOOLEAN DEFAULT FALSE NOT NULL,
-                is_active BOOLEAN DEFAULT TRUE NOT NULL,
-                referral_code VARCHAR(50) UNIQUE NOT NULL,
-                referred_by INTEGER REFERENCES users(id),
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-                last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-            )
-        """)
-        
-        # Create indexes for users table
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
-        
-        # Create balances table
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS balances (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                amount BIGINT DEFAULT 0 NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-            )
-        """)
-        
-        # Create transactions table
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS transactions (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                type VARCHAR(20) NOT NULL,
-                amount BIGINT NOT NULL,
-                usd_amount DECIMAL(10,2),
-                status VARCHAR(20) DEFAULT 'pending' NOT NULL,
-                payment_method VARCHAR(50),
-                payment_data JSONB,
-                description TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-            )
-        """)
-        
-        # Create indexes for transactions table
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)")
-        
-        # Create services table
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS services (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                description TEXT,
-                category VARCHAR(100),
-                price_per_1000 BIGINT NOT NULL,
-                min_quantity INTEGER DEFAULT 1 NOT NULL,
-                max_quantity INTEGER DEFAULT 1000000 NOT NULL,
-                is_active BOOLEAN DEFAULT TRUE NOT NULL,
-                jap_service_id VARCHAR(100),
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-            )
-        """)
-        
-        # Create indexes for services table
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_category ON services(category)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_is_active ON services(is_active)")
-        
-        # Create orders table
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS orders (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                service_id INTEGER NOT NULL REFERENCES services(id),
-                link VARCHAR(500) NOT NULL,
-                quantity INTEGER NOT NULL,
-                charge BIGINT NOT NULL,
-                status VARCHAR(20) DEFAULT 'pending' NOT NULL,
-                jap_order_id VARCHAR(100),
-                start_count INTEGER DEFAULT 0,
-                remains INTEGER DEFAULT 0,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-            )
-        """)
-        
-        # Create indexes for orders table
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_service_id ON orders(service_id)")
-        
-        # Create settings table
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS settings (
-                id SERIAL PRIMARY KEY,
-                key VARCHAR(100) UNIQUE NOT NULL,
-                value TEXT NOT NULL,
-                description TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
-            )
-        """)
-        
-        # Create indexes for settings table
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)")
-        
-        logger.info("All database tables created/verified")
+        try:
+            # Create users table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    telegram_id BIGINT UNIQUE NOT NULL,
+                    username VARCHAR(255),
+                    first_name VARCHAR(255),
+                    last_name VARCHAR(255),
+                    language VARCHAR(10) DEFAULT 'en' NOT NULL,
+                    is_admin BOOLEAN DEFAULT FALSE NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+                    referral_code VARCHAR(50) UNIQUE NOT NULL,
+                    referred_by INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """)
+            logger.info("Users table created/verified")
+            
+            # Create balances table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS balances (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    amount BIGINT DEFAULT 0 NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """)
+            logger.info("Balances table created/verified")
+            
+            # Create transactions table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    type VARCHAR(20) NOT NULL,
+                    amount BIGINT NOT NULL,
+                    usd_amount DECIMAL(10,2),
+                    status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+                    payment_method VARCHAR(50),
+                    payment_data JSONB,
+                    description TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """)
+            logger.info("Transactions table created/verified")
+            
+            # Create services table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS services (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    category VARCHAR(100),
+                    price_per_1000 BIGINT NOT NULL,
+                    min_quantity INTEGER DEFAULT 1 NOT NULL,
+                    max_quantity INTEGER DEFAULT 1000000 NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+                    jap_service_id VARCHAR(100),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """)
+            logger.info("Services table created/verified")
+            
+            # Create orders table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS orders (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    service_id INTEGER NOT NULL REFERENCES services(id),
+                    link VARCHAR(500) NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    charge BIGINT NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+                    jap_order_id VARCHAR(100),
+                    start_count INTEGER DEFAULT 0,
+                    remains INTEGER DEFAULT 0,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """)
+            logger.info("Orders table created/verified")
+            
+            # Create settings table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    id SERIAL PRIMARY KEY,
+                    key VARCHAR(100) UNIQUE NOT NULL,
+                    value TEXT NOT NULL,
+                    description TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """)
+            logger.info("Settings table created/verified")
+            
+            # Create indexes after all tables are created
+            await self._create_indexes(conn)
+            
+            logger.info("All database tables and indexes created/verified successfully")
+            
+        except Exception as e:
+            logger.error(f"Error creating tables: {e}")
+            raise
+    
+    async def _create_indexes(self, conn):
+        """Create indexes for all tables"""
+        try:
+            # Create indexes for users table
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
+            
+            # Create indexes for transactions table
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)")
+            
+            # Create indexes for services table
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_category ON services(category)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_services_is_active ON services(is_active)")
+            
+            # Create indexes for orders table
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_service_id ON orders(service_id)")
+            
+            # Create indexes for settings table
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)")
+            
+            logger.info("All database indexes created/verified")
+            
+        except Exception as e:
+            logger.warning(f"Some indexes could not be created: {e}")
+            # Don't raise here as indexes are not critical for basic functionality
 
 
 # Global database manager instance
