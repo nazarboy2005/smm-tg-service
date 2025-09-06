@@ -44,8 +44,8 @@ async def shutdown():
         
         # Close database
         try:
-            from bot.database.db import close
-            await close()
+            from bot.database.db import db_manager
+            await db_manager.close()
             logger.info("Database connection closed")
         except Exception as e:
             logger.warning(f"Error closing database: {e}")
@@ -73,9 +73,18 @@ async def setup_bot():
         
         # Initialize database
         try:
-            from bot.database.db import initialize, create_tables
-            await initialize()
-            await create_tables()
+            from bot.database.db import db_manager
+            success = await db_manager.initialize()
+            if not success:
+                logger.error("Database initialization failed")
+                return False
+            
+            # Create tables if they don't exist
+            success = await db_manager.create_tables()
+            if not success:
+                logger.error("Database table creation failed")
+                return False
+                
             logger.info("Database initialized successfully")
         except Exception as e:
             logger.error(f"Database initialization failed: {e}")
@@ -207,9 +216,16 @@ async def main():
         )
         webhook_requests_handler.register(app, path="/webhook")
         
-        # Setup web interface
-        from bot.web.server import app as web_app
-        app.add_subapp("/", web_app)
+        # Setup web interface - we'll handle this differently
+        # The web interface will be available through the FastAPI app
+        # For now, we'll just add a simple redirect to the web interface
+        async def web_redirect(request):
+            return web.Response(
+                text='<html><body><h1>Elite JAP Bot</h1><p>Web interface is being loaded...</p><script>setTimeout(() => window.location.reload(), 2000);</script></body></html>',
+                content_type='text/html'
+            )
+        
+        app.router.add_get("/", web_redirect)
         
         # Health check endpoint
         async def health_check(request):
